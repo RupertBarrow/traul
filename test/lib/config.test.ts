@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { deepMerge, getSyncStartTimestamp, setRawParsedConfig, type TraulConfig } from "../../src/lib/config";
+import { deepMerge, defaultImapConfig, getSyncStartTimestamp, setRawParsedConfig, type TraulConfig } from "../../src/lib/config";
 import { DEFAULT_PORT, DEFAULT_EMBED_INTERVAL } from "../../src/daemon/types";
 
 function makeConfig(overrides: Partial<TraulConfig> = {}): TraulConfig {
@@ -13,6 +13,7 @@ function makeConfig(overrides: Partial<TraulConfig> = {}): TraulConfig {
     gmail: { client_id: "", client_secret: "", refresh_token: "", accounts: [] },
     whatsapp: { instances: [] },
     discord: { token: "", servers: { allowlist: [], stoplist: [] }, channels: { allowlist: [], stoplist: [] } },
+    imap: defaultImapConfig(),
     embeddings: {
       backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
       keep_alive: "60s", timeout_ms: 30000, allow_remote: false,

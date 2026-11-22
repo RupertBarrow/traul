@@ -7,6 +7,38 @@ export const UPSERT_MESSAGE = `
     updated_at = unixepoch()
 `;
 
+/** The imap source updates every column on conflict, but a stub (metadata.stub) never replaces a full message. */
+export const UPSERT_MESSAGE_IMAP = `
+  INSERT INTO messages (source, source_id, channel_id, channel_name, thread_id, author_id, author_name, content, sent_at, metadata)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(source, source_id) DO UPDATE SET
+    channel_id = excluded.channel_id,
+    channel_name = excluded.channel_name,
+    thread_id = excluded.thread_id,
+    author_id = excluded.author_id,
+    author_name = excluded.author_name,
+    content = excluded.content,
+    sent_at = excluded.sent_at,
+    metadata = excluded.metadata,
+    updated_at = unixepoch()
+  WHERE json_extract(excluded.metadata, '$.stub') IS NULL
+     OR json_extract(messages.metadata, '$.stub') IS NOT NULL
+`;
+
+export const GET_IMAP_STUBS = `
+  SELECT source_id, metadata FROM messages
+  WHERE source = 'imap' AND json_extract(metadata, '$.stub') = 1
+    AND json_extract(metadata, '$.account') = ? AND json_extract(metadata, '$.folder') = ?
+    AND json_extract(metadata, '$.uidValidity') = ?
+  ORDER BY sent_at DESC
+  LIMIT ?
+`;
+
+export const MARK_IMAP_STUB_GONE = `
+  UPDATE messages SET metadata = json_set(metadata, '$.stub', 'gone'), updated_at = unixepoch()
+  WHERE source = 'imap' AND source_id = ? AND json_extract(metadata, '$.stub') = 1
+`;
+
 export const UPSERT_CONTACT = `
   INSERT INTO contacts (display_name)
   VALUES (?)

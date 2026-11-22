@@ -15,6 +15,30 @@ export interface EmbeddingsConfig {
   allow_remote: boolean;
 }
 
+export interface ImapAccount {
+  name: string;
+  host: string;
+  port?: number;
+  /** implicit (default), starttls, or plain (loopback hosts only). */
+  tls?: "implicit" | "starttls" | "plain";
+  user: string;
+  /** NAME of the secret (environment variable or Keychain account); the file never holds a password. */
+  password_secret: string;
+  /** Names or patterns (`*`, `?`, `/` as the separator); absent means INBOX. */
+  folders?: string[];
+}
+
+export interface ImapConfig {
+  keychain_service: string;
+  sync_start: string;
+  max_body_bytes: number;
+  max_text_chars: number;
+  max_messages_per_run: number;
+  max_run_seconds: number;
+  backfill_per_run: number;
+  accounts: ImapAccount[];
+}
+
 export interface TraulConfig {
   sync_start: string;
   database: {
@@ -66,8 +90,16 @@ export interface TraulConfig {
       stoplist: string[];
     };
   };
+  imap: ImapConfig;
   embeddings: EmbeddingsConfig;
   daemon: DaemonConfig;
+}
+
+export function defaultImapConfig(): ImapConfig {
+  return {
+    keychain_service: "", sync_start: "", max_body_bytes: 262144, max_text_chars: 100000,
+    max_messages_per_run: 100, max_run_seconds: 120, backfill_per_run: 50, accounts: [],
+  };
 }
 
 function getDefaultConfig(): TraulConfig {
@@ -85,6 +117,7 @@ function getDefaultConfig(): TraulConfig {
       servers: { allowlist: [], stoplist: [] },
       channels: { allowlist: [], stoplist: [] },
     },
+    imap: defaultImapConfig(),
     embeddings: {
       backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
       keep_alive: "60s", timeout_ms: 30000, allow_remote: false,

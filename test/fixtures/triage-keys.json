@@ -1,0 +1,140 @@
+{
+  "note": "Synthetic headers. Keys computed by the consumer's messageIdKey: mid:<id>, or imap:<account>:<folder>:<uidValidity>:<uid> without a Message-ID. The same file is kept in both repositories.",
+  "vectors": [
+    {
+      "name": "plain id",
+      "headers": "Message-ID: <abc123@mail.example.org>\r\nSubject: x\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1000,
+      "uid": 1,
+      "key": "mid:abc123@mail.example.org"
+    },
+    {
+      "name": "lowercase header name",
+      "headers": "message-id: <lower@example.org>\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1001,
+      "uid": 2,
+      "key": "mid:lower@example.org"
+    },
+    {
+      "name": "no angle brackets",
+      "headers": "Message-ID: bare-id@example.org\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1002,
+      "uid": 3,
+      "key": "mid:bare-id@example.org"
+    },
+    {
+      "name": "surrounding spaces",
+      "headers": "Message-ID:    <  spaced@example.org>   \r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1003,
+      "uid": 4,
+      "key": "mid:  spaced@example.org"
+    },
+    {
+      "name": "no header",
+      "headers": "Subject: nothing\r\nFrom: a@example.org\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1004,
+      "uid": 5,
+      "key": "imap:personal:INBOX/Clients:1004:5"
+    },
+    {
+      "name": "empty header value",
+      "headers": "Message-ID:\r\nSubject: x\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1005,
+      "uid": 6,
+      "key": "mid:Subject: x"
+    },
+    {
+      "name": "empty brackets",
+      "headers": "Message-ID: <>\r\nSubject: x\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1006,
+      "uid": 7,
+      "key": "imap:personal:INBOX/Clients:1006:7"
+    },
+    {
+      "name": "folded after the colon",
+      "headers": "Message-ID:\r\n <folded@example.org>\r\nSubject: x\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1007,
+      "uid": 8,
+      "key": "mid:folded@example.org"
+    },
+    {
+      "name": "two headers, first wins",
+      "headers": "Message-ID: <first@example.org>\r\nMessage-ID: <second@example.org>\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1008,
+      "uid": 9,
+      "key": "mid:first@example.org"
+    },
+    {
+      "name": "comment after the id",
+      "headers": "Message-ID: <c@example.org> (comment)\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1009,
+      "uid": 10,
+      "key": "mid:c@example.org> (comment)"
+    },
+    {
+      "name": "bare LF line endings",
+      "headers": "Subject: lf\nMessage-ID: <lf@example.org>\nDate: x\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1010,
+      "uid": 11,
+      "key": "mid:lf@example.org"
+    },
+    {
+      "name": "id with plus and slash",
+      "headers": "Message-ID: <a+b/c=d@example.org>\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1011,
+      "uid": 12,
+      "key": "mid:a+b/c=d@example.org"
+    },
+    {
+      "name": "accented id",
+      "headers": "Message-ID: <café@example.org>\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1012,
+      "uid": 13,
+      "key": "mid:café@example.org"
+    },
+    {
+      "name": "header text not at line start",
+      "headers": "X-Message-ID: <x@example.org>\r\nSubject: Message-ID: <inline@example.org>\r\n",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1013,
+      "uid": 14,
+      "key": "imap:personal:INBOX/Clients:1013:14"
+    },
+    {
+      "name": "no headers at all",
+      "headers": "",
+      "account": "personal",
+      "folder": "INBOX/Clients",
+      "uidValidity": 1014,
+      "uid": 15,
+      "key": "imap:personal:INBOX/Clients:1014:15"
+    }
+  ]
+}

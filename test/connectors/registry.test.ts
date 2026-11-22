@@ -37,12 +37,12 @@ describe("entry points", () => {
   it("all.ts registers every built-in connector once", () => {
     const names = allConnectors.map((c) => c.name).sort();
     expect(names).toEqual(
-      ["claudecode", "discord", "gmail", "linear", "markdown", "slack", "telegram", "whatsapp"],
+      ["claudecode", "discord", "gmail", "imap", "linear", "markdown", "slack", "telegram", "whatsapp"],
     );
   });
 
-  it("the Triage list holds imap only (empty until the imap connector lands)", () => {
-    for (const c of triageConnectors) expect(c.name).toBe("imap");
+  it("the Triage list holds imap only", () => {
+    expect(triageConnectors.map((c) => c.name)).toEqual(["imap"]);
   });
 
   it("index.triage.ts registers the Triage list and pulls in no other connector, no whatsapp, no llama", () => {
