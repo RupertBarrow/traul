@@ -4,7 +4,10 @@ import { Scheduler } from "../../src/daemon/scheduler";
 import { startHealthServer, stopHealthServer } from "../../src/daemon/health";
 import { DEFAULT_PORT } from "../../src/daemon/types";
 import { loadConfig } from "../../src/lib/config";
-import { getConnectorNames } from "../../src/connectors/registry";
+import { getConnectorNames, setConnectors } from "../../src/connectors/registry";
+import { allConnectors } from "../../src/connectors/all";
+
+setConnectors(allConnectors);
 
 describe("daemon integration", () => {
   let scheduler: Scheduler | null = null;

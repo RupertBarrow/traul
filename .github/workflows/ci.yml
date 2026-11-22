@@ -20,3 +20,16 @@ jobs:
 
       - name: Tests
         run: bun test
+
+  triage-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build the Triage entry point twice (linux-x64) and compare
+        run: TRAUL_BUILD_TARGETS="bun-linux-x64:traul-linux-x64" scripts/build-triage.sh "$RUNNER_TEMP/triage" --check
+
+      - name: Compiled executable tests
+        run: bun test test/build
