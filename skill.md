@@ -1,6 +1,6 @@
 ---
 name: traul
-description: Personal Intelligence Engine CLI for syncing, searching, and monitoring messages from Slack, Telegram, Discord, Linear, Gmail, Claude Code sessions, Markdown files, and WhatsApp. Use when working with traul commands, message sync, search, signals, briefings, or browsing chat history.
+description: Personal Intelligence Engine CLI for syncing, searching, and monitoring messages from Slack, Telegram, Discord, Linear, Gmail, IMAP mail, Claude Code sessions, Markdown files, and WhatsApp. Use when working with traul commands, message sync, search, signals, briefings, or browsing chat history.
 allowed-tools:
   - Bash
   - Read
@@ -28,14 +28,23 @@ Sync messages from communication sources incrementally.
 
 | Argument | Description |
 |----------|-------------|
-| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
+| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
 
 - Uses cursor-based incremental sync (only fetches new messages)
 - Slack: syncs channels + thread replies, caches user profiles, stores reactions/reply_count in metadata
 - Telegram: syncs via `tg.py` (Telethon), 1-hour cooldown skip per chat, progress reporting every 10s
 - Claude Code: reads all JSONL sessions from `~/.claude/projects/`, extracts user+assistant messages
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
+- IMAP: read-only mail (`EXAMINE`, `BODY.PEEK`), cursors per folder on `UIDVALIDITY` and UID, budgets per run, backfill of stubs (see Connectors)
 - Reports messages added + contacts discovered per source
+
+### `traul imap check --account <name> [--json]`
+
+Connect, `LOGIN`, `EXAMINE` each configured folder (`LIST` for a pattern), `LOGOUT`. Fetches nothing and opens no database (no database file is created). Prints `{"account","status"}`; `status` is `ok` or one of `auth_failed`, `unreachable`, `tls_error`, `timeout`, `folder_failed`, `no_secret`, `protocol`. Without `--json` it prints `<account>: <status>`. Exit 0 when it ran (read the status); exit 2 for a bad configuration or an unknown account. Never prints a host, a user or a server line.
+
+### `traul imap folders --account <name> [--json]`
+
+Lists the folder names of an account: `{"account","folders":[...]}` (or `{"account","status"}` when it could not connect). Same exit codes and rules as `imap check`.
 
 ### `traul search <query>`
 
@@ -246,6 +255,21 @@ All `--json` outputs use clean, normalized field names (not raw SQL column names
 - **Cursors:** Stored per-workspace+team as `<workspace>:team:<id>` or `<workspace>:all`
 - **Multi-workspace:** All `LINEAR_API_KEY_*` env vars are auto-discovered as separate workspaces
 
+### IMAP
+
+Read-only mail (docs/triage-fork/SPEC.md, section 5). Message text is stored in `messages`.
+
+- **Auth:** by NAME. Each account has `password_secret`, matching `^[A-Za-z0-9._-]+$`: the environment variable of that name if set and non-empty; else, on macOS with a non-empty `imap.keychain_service`, `/usr/bin/security find-generic-password -s <service> -a <name> -w` (5 s, no shell); else the status `no_secret`. The config file never holds a password, and nothing writes the Keychain.
+- **Config:** `imap.keychain_service`, `sync_start`, `max_body_bytes` (262144), `max_text_chars` (100000), `max_messages_per_run` (100), `max_run_seconds` (120), `backfill_per_run` (50), `accounts[]` each with `name`, `host`, `port` (993; 143 for `starttls` and `plain`), `tls` (`implicit` default, `starttls`, or `plain` for a loopback host only; `plain_remote` otherwise), `user`, `password_secret`, `folders[]` (names or patterns with `*` and `?`, `/` as the separator whatever the server uses; absent means `INBOX`).
+- **Read-only by construction:** the only verbs sent are `CAPABILITY`, `STARTTLS`, `LOGIN`, `LIST`, `EXAMINE`, `UID SEARCH`, `UID FETCH` (with `BODY.PEEK` only) and `LOGOUT`.
+- **TLS:** the certificate is verified for every host except a loopback one (a local bridge serves a self-signed certificate). The server name is sent for a host name only, never for an IP address. `LOGIN` is never sent before a `STARTTLS` upgrade, nor on a `plain` session that advertises `LOGINDISABLED`.
+- **Stored:** `source` `imap`; `source_id` `mid:<Message-ID without angle brackets>`, or without one `imap:<account>:<folder>:<uidValidity>:<uid>` (the same key as Triage's, shared vectors in `test/fixtures/triage-keys.json`); `channel_id` the account; `channel_name` `<account>/<folder>`; `thread_id` first of `References`, else `In-Reply-To`, else the Message-ID; `author_id`/`author_name` from `From` (RFC 2047 decoded); `content` the subject, a blank line, the text (the subject alone when there is no text part); `sent_at` the `Date` header, else `INTERNALDATE`; `metadata` `{"v":1,"account","folder","uidValidity","uid","messageId","subject","from","to","date","listUnsubscribe","listId","truncated"?,"stub"?}`.
+- **Text:** `text/plain`, else `text/html` through `html-to-text`; attachments and other types are skipped; base64 and quoted-printable; charsets through `TextDecoder` (ISO-8859-1 and -15 as windows-1252 with the eight differing code points mapped); cut at `max_text_chars`; a part cut by the partial fetch sets `truncated`. The upsert for this source updates every column on conflict, but a stub never replaces a full message.
+- **Cursors:** `sync_cursors` source `imap`, key `<account>|<folder>`, value `{"uidValidity":N,"lastUid":M}`. A `UIDVALIDITY` other than the cursor's resets it. The row and the cursor move in one transaction. A UID whose fetch fails stops the folder; the same UID failing three runs in a row (counted in `traul_meta`, key `imap_fail:...`) is skipped.
+- **Backfill:** with budget left, up to `backfill_per_run` rows of the account whose `metadata.stub` is `true` and whose locator matches the folder's current `UIDVALIDITY` are fetched by UID; the fetched message must yield the stub's `source_id`, then it replaces the stub. A UID that is gone, or another message, sets `stub` to `"gone"`.
+- **Budget:** `max_messages_per_run` and `max_run_seconds` are shared by the accounts in turn; what is left waits for the next run.
+- **Logs:** counts and codes only, never a subject, an address or text.
+
 ### Claude Code
 
 - **Auth:** None required (reads local files)
@@ -365,6 +389,17 @@ FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
 }
 ```
 
+```json
+"imap": {
+  "keychain_service": "", "sync_start": "2026-09-01", "max_body_bytes": 262144, "max_text_chars": 100000,
+  "max_messages_per_run": 100, "max_run_seconds": 120, "backfill_per_run": 50,
+  "accounts": [
+    { "name": "personal", "host": "imap.example.org", "port": 993, "tls": "implicit",
+      "user": "me@example.org", "password_secret": "IMAP_PASSWORD_PERSONAL", "folders": ["INBOX"] }
+  ]
+}
+```
+
 ENV vars override config values. Empty `channels`/`chats` arrays = sync all.
 
 ---
@@ -377,11 +412,11 @@ src/
   commands/                 # Command handlers
     sync.ts, search.ts, messages.ts, channels.ts, get.ts, signals.ts, briefing.ts, sql.ts
   connectors/               # Source adapters
-    types.ts, slack.ts, telegram.ts, linear.ts, claude-code.ts, markdown.ts
+    types.ts, slack.ts, telegram.ts, linear.ts, claude-code.ts, markdown.ts, imap.ts, imap-sync.ts
   db/                       # Data layer
     schema.ts, database.ts, queries.ts
   lib/                      # Utilities
-    config.ts, logger.ts, formatter.ts
+    config.ts, logger.ts, formatter.ts, secrets.ts, mime.ts, imap/ (protocol.ts, session.ts)
   signals/                  # Signal engine
     types.ts, evaluator.ts, definitions/stale-threads.ts
 ```

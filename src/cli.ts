@@ -13,6 +13,7 @@ import { runSql, runSchema } from "./commands/sql";
 import { runGet } from "./commands/get";
 import { runReset } from "./commands/reset";
 import { runMigrations } from "./db/migrations";
+import { registerImapCommands } from "./commands/imap";
 
 /** Shared by both entry points (src/index.ts and src/index.triage.ts). */
 export function bootstrap(): { config: TraulConfig; db: TraulDB } {
@@ -21,6 +22,18 @@ export function bootstrap(): { config: TraulConfig; db: TraulDB } {
   const db = new TraulDB(config.database.path);
   runMigrations(db);
   return { config, db };
+}
+
+/**
+ * `traul imap ...` needs no database: run it before bootstrap() so that no database file is created.
+ * Returns true when it handled the command line.
+ */
+export async function runDatabaseFree(argv: string[]): Promise<boolean> {
+  if (argv[2] !== "imap") return false;
+  const program = newProgram();
+  registerImapCommands(program, loadConfig());
+  await program.parseAsync(argv);
+  return true;
 }
 
 export function newProgram(): Command {
