@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import * as sqliteVec from "sqlite-vec";
 import { existsSync } from "fs";
 import { resolveSqliteLib, secureDbFile } from "../lib/paths";
-import { EMBED_DIMS } from "../lib/embeddings";
+import { getEmbedSettings } from "../lib/embed-config";
 
 // macOS ships Apple's SQLite which doesn't support extensions: load another
 // one (TRAUL_SQLITE_LIB, else Homebrew's, Apple Silicon then Intel).
@@ -132,6 +132,7 @@ export function initializeDatabase(path: string): Database {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA_SQL);
+  const EMBED_DIMS = getEmbedSettings().dims;
   db.exec(
     `CREATE VIRTUAL TABLE IF NOT EXISTS vec_messages USING vec0(message_id INTEGER PRIMARY KEY, embedding float[${EMBED_DIMS}])`
   );

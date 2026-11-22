@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { TraulDB } from "../../src/db/database";
-import { EMBED_DIMS } from "../../src/lib/embeddings";
+import { getEmbedSettings } from "../../src/lib/embed-config";
+
+const EMBED_DIMS = getEmbedSettings().dims;
 import { runSearch } from "../../src/commands/search";
 
 function fakeEmbedding(): Uint8Array {

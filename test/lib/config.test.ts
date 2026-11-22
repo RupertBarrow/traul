@@ -13,6 +13,10 @@ function makeConfig(overrides: Partial<TraulConfig> = {}): TraulConfig {
     gmail: { client_id: "", client_secret: "", refresh_token: "", accounts: [] },
     whatsapp: { instances: [] },
     discord: { token: "", servers: { allowlist: [], stoplist: [] }, channels: { allowlist: [], stoplist: [] } },
+    embeddings: {
+      backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
+      keep_alive: "60s", timeout_ms: 30000, allow_remote: false,
+    },
     daemon: { port: DEFAULT_PORT, intervals: { embed: DEFAULT_EMBED_INTERVAL } },
     ...overrides,
   };

@@ -1,5 +1,5 @@
 import type { TraulDB } from "../db/database";
-import { EMBED_DIMS } from "../lib/embeddings";
+import { getEmbedSettings } from "../lib/embed-config";
 
 type Layer = "sync" | "chunks" | "embed" | "all";
 
@@ -30,7 +30,7 @@ export function runReset(
   }
 
   if (doEmbed) {
-    db.resetEmbeddings(EMBED_DIMS);
+    db.resetEmbeddings(getEmbedSettings().dims);
     console.log("Reset all embeddings. Run 'traul embed' to regenerate.");
   }
 }

@@ -14,7 +14,7 @@ allowed-tools:
 
 CLI tool that watches communication streams (Slack, Telegram, Discord, Linear, Gmail, Claude Code sessions, Markdown files, WhatsApp), indexes messages, detects patterns via signals, and surfaces actionable insights.
 
-**Runtime:** Bun + TypeScript | **DB:** SQLite (WAL mode, FTS5, sqlite-vec) | **Embeddings:** node-llama-cpp (Qwen3-Embedding-0.6B), Ollama fallback | **Version:** 0.2.0
+**Runtime:** Bun + TypeScript | **DB:** SQLite (WAL mode, FTS5, sqlite-vec) | **Embeddings:** Ollama (qwen3-embedding:0.6b, the fork default) or node-llama-cpp, chosen by configuration | **Version:** 0.2.0
 
 **Project:** `/Users/dandaka/projects/traul`
 
@@ -42,7 +42,7 @@ Sync messages from communication sources incrementally.
 Hybrid search combining vector similarity (semantic) and FTS5 keyword matching with Reciprocal Rank Fusion. Falls back to FTS-only if embedding is unavailable.
 
 **Search modes:**
-- **Hybrid (default)** — best for multi-word and exploratory queries. Finds semantically related messages even when exact keywords don't appear. Uses node-llama-cpp with Qwen3-Embedding-0.6B (auto-downloads ~639MB model on first use). Falls back to Ollama, then FTS-only. Prints coverage ratio to stderr (e.g. `88% vector, 12% FTS`).
+- **Hybrid (default)** — best for multi-word and exploratory queries. Finds semantically related messages even when exact keywords don't appear. Embeds the query through the configured backend (Ollama by default; see Embeddings configuration). There is no fall-through from one backend to the other; if embedding is unavailable it falls back to FTS-only. Prints coverage ratio to stderr (e.g. `88% vector, 12% FTS`).
 - **FTS-only (`--fts`)** — keyword matching with BM25 ranking. Faster, but requires ALL terms to match (implicit AND). Brittle with multi-word queries, especially combined with source/channel filters.
 - **OR mode (`--or`)** — joins search terms with OR instead of AND. Works with both `--fts` and hybrid. Use for broad exploratory queries where any term is relevant.
 - **Substring (`--like`)** — bypasses FTS entirely, uses SQL LIKE. Useful for exact phrases that FTS tokenization breaks (e.g. "how do I").
@@ -323,6 +323,20 @@ FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
 | `TRAUL_DB_PATH` | Database file (default `$TRAUL_HOME/traul.db`) |
 | `TRAUL_SQLITE_LIB` | SQLite library to load (macOS: default is Homebrew's, Apple Silicon then Intel) |
 | `TRAUL_SQLITE_VEC` | Path of the sqlite-vec extension, loaded instead of the bundled package |
+
+**Embeddings configuration** (fork change: the default backend is now Ollama, not node-llama-cpp):
+
+```json
+"embeddings": { "backend": "ollama", "url": "http://127.0.0.1:11434", "model": "qwen3-embedding:0.6b",
+                "dims": 1024, "keep_alive": "60s", "timeout_ms": 30000, "allow_remote": false }
+```
+
+- `backend`: `ollama` (default) or `llama`. `node-llama-cpp` is an optional dependency, loaded only for `llama`. A failing backend is an error; traul never switches to the other one.
+- Environment overrides: `TRAUL_OLLAMA_URL` (then `OLLAMA_URL`), `TRAUL_EMBED_MODEL`, `TRAUL_EMBED_DIMS`.
+- Loopback only: the URL host must be `localhost`, `127.0.0.0/8` or `::1`, else the error `ollama_remote` and no request. Only `allow_remote: true` in the config file lifts this (no environment variable can).
+- The vector tables are created with `dims`. Changing `model` or `dims` resets the embeddings on the next start; re-embed with `traul embed`.
+- traul never pulls or substitutes a model. Named states: `model_missing`, `ollama_down` (refused connection or timeout), `dims_mismatch` (a vector of another length; nothing is stored), `ollama_remote`.
+- Queries get the instruction prefix for Qwen embedding models.
 
 ```json
 {

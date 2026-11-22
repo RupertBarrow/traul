@@ -3,6 +3,18 @@ import { dirname } from "path";
 import { configPath, dbPath, ensureDir } from "./paths";
 import { DEFAULT_PORT, DEFAULT_EMBED_INTERVAL, type DaemonConfig, type DaemonIntervals } from "../daemon/types";
 
+export interface EmbeddingsConfig {
+  backend: "ollama" | "llama";
+  url: string;
+  /** Empty means the backend's default model. */
+  model: string;
+  dims: number;
+  keep_alive: string;
+  timeout_ms: number;
+  /** Honoured from the config file only, never from the environment. */
+  allow_remote: boolean;
+}
+
 export interface TraulConfig {
   sync_start: string;
   database: {
@@ -54,6 +66,7 @@ export interface TraulConfig {
       stoplist: string[];
     };
   };
+  embeddings: EmbeddingsConfig;
   daemon: DaemonConfig;
 }
 
@@ -71,6 +84,10 @@ function getDefaultConfig(): TraulConfig {
       token: "",
       servers: { allowlist: [], stoplist: [] },
       channels: { allowlist: [], stoplist: [] },
+    },
+    embeddings: {
+      backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
+      keep_alive: "60s", timeout_ms: 30000, allow_remote: false,
     },
     daemon: { port: DEFAULT_PORT, intervals: { embed: DEFAULT_EMBED_INTERVAL } },
   };
