@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { dirname } from "path";
+import { configPath, dbPath, ensureDir } from "./paths";
 import { DEFAULT_PORT, DEFAULT_EMBED_INTERVAL, type DaemonConfig, type DaemonIntervals } from "../daemon/types";
 
 export interface TraulConfig {
@@ -57,14 +57,10 @@ export interface TraulConfig {
   daemon: DaemonConfig;
 }
 
-const CONFIG_DIR = join(homedir(), ".config", "traul");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
-const DEFAULT_DB_PATH = join(homedir(), ".local", "share", "traul", "traul.db");
-
 function getDefaultConfig(): TraulConfig {
   return {
     sync_start: "",
-    database: { path: DEFAULT_DB_PATH },
+    database: { path: dbPath() },
     slack: { token: "", cookie: "", my_user_id: "", channels: [] },
     telegram: { api_id: "", api_hash: "", session_path: "", chats: [] },
     linear: { api_key: "", teams: [], workspaces: [] },
@@ -102,9 +98,10 @@ export function loadConfig(): TraulConfig {
   const defaults = getDefaultConfig();
 
   let parsed: any = {};
-  if (existsSync(CONFIG_PATH)) {
+  const cfgPath = configPath();
+  if (existsSync(cfgPath)) {
     try {
-      const raw = readFileSync(CONFIG_PATH, "utf-8");
+      const raw = readFileSync(cfgPath, "utf-8");
       parsed = JSON.parse(raw);
       _rawParsed = parsed;
       deepMerge(defaults, parsed);
@@ -230,16 +227,14 @@ export function setRawParsedConfig(val: Record<string, any>): void {
 }
 
 export function ensureDbDir(dbPath: string): void {
-  const dir = join(dbPath, "..");
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  ensureDir(dirname(dbPath));
 }
 
 export function saveDefaultConfig(): void {
-  if (!existsSync(CONFIG_PATH)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
-    writeFileSync(CONFIG_PATH, JSON.stringify(getDefaultConfig(), null, 2));
+  const cfgPath = configPath();
+  if (!existsSync(cfgPath)) {
+    ensureDir(dirname(cfgPath));
+    writeFileSync(cfgPath, JSON.stringify(getDefaultConfig(), null, 2));
   }
 }
 

@@ -314,6 +314,16 @@ FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
 
 **File:** `~/.config/traul/config.json`
 
+**Paths and SQLite from the environment** (for running inside an app):
+
+| Variable | Meaning |
+|---|---|
+| `TRAUL_HOME` | Folder for the database, pid file and log (default `~/.local/share/traul`). Created 0700; the database file is 0600. |
+| `TRAUL_CONFIG_PATH` | Config file (default `~/.config/traul/config.json`) |
+| `TRAUL_DB_PATH` | Database file (default `$TRAUL_HOME/traul.db`) |
+| `TRAUL_SQLITE_LIB` | SQLite library to load (macOS: default is Homebrew's, Apple Silicon then Intel) |
+| `TRAUL_SQLITE_VEC` | Path of the sqlite-vec extension, loaded instead of the bundled package |
+
 ```json
 {
   "sync_start": "2025-01-01",

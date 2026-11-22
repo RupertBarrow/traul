@@ -1,4 +1,5 @@
 import { getLlama, LlamaLogLevel, resolveModelFile, type Llama, type LlamaModel, type LlamaEmbeddingContext } from "node-llama-cpp";
+import { homeDir } from "./paths";
 import { formatQuery, formatDoc } from "./llama-format";
 export { isQwenEmbeddingModel, formatQuery, formatDoc } from "./llama-format";
 
@@ -50,7 +51,7 @@ async function getContext(): Promise<LlamaEmbeddingContext> {
 
   if (!model) {
     const modelPath = await resolveModelFile(LLAMA_EMBED_MODEL, {
-      directory: `${process.env.HOME}/.cache/traul/models`,
+      directory: `${homeDir()}/.cache/traul/models`,
       onProgress: ({ totalSize, downloadedSize }) => {
         const pct = totalSize > 0 ? Math.round((downloadedSize / totalSize) * 100) : 0;
         process.stderr.write(`\rDownloading model: ${pct}%`);

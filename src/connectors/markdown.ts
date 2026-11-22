@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync, existsSync } from "fs";
 import { join, relative, basename, extname } from "path";
-import { homedir } from "os";
+import { homeDir } from "../lib/paths";
 import { createHash } from "crypto";
 import type { Connector, SyncResult } from "./types";
 import type { TraulDB } from "../db/database";
@@ -63,7 +63,7 @@ export const markdownConnector: Connector = {
     }
 
     for (const rawDir of dirs) {
-      const dir = rawDir.replace(/^~/, homedir());
+      const dir = rawDir.replace(/^~/, homeDir());
       log.info(`  Scanning ${dir}`);
 
       const files = walkMarkdown(dir);
@@ -81,7 +81,7 @@ export const markdownConnector: Connector = {
 
         if (content.trim().length === 0) continue;
 
-        const relPath = relative(dir.replace(/^~/, homedir()), filePath);
+        const relPath = relative(dir.replace(/^~/, homeDir()), filePath);
         const sourceId = `md:${fileHash(filePath)}`;
         const cursorKey = `file:${relPath}`;
         const lastHash = db.getSyncCursor("markdown", cursorKey);
@@ -127,7 +127,7 @@ export const markdownConnector: Connector = {
     }
 
     // Prune messages whose source files no longer exist
-    const expandedDirs = dirs.map((d) => d.replace(/^~/, homedir()));
+    const expandedDirs = dirs.map((d) => d.replace(/^~/, homeDir()));
     const allMessages = db.getMessagesBySource("markdown");
     let pruned = 0;
 
