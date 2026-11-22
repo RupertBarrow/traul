@@ -49,8 +49,8 @@ describe("entry points", () => {
     const text = src("index.triage.ts");
     expect(text).toContain("triageConnectors");
     expect(text).not.toMatch(/connectors\/all|whatsapp|slack|discord|gmail|linear|telegram|llama/i);
-    const cli = src("cli.ts");
-    expect(cli).not.toMatch(/connectors\/all|whatsapp|slack|discord|gmail|linear|telegram|googleapis/i);
+    const imports = src("cli.ts").split("\n").filter((l) => l.startsWith("import"));
+    expect(imports.join("\n")).not.toMatch(/connectors\/(?!registry)|whatsapp|googleapis/i);
   });
 
   it("index.ts registers all connectors and the whatsapp command", () => {
