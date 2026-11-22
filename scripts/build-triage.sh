@@ -22,11 +22,15 @@ TARGETS="${TRAUL_BUILD_TARGETS:-bun-darwin-arm64:traul-arm64 bun-darwin-x64:trau
 
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 
+# The commit is part of the bytes (traul --contract prints it): TRAUL_BUILD_COMMIT, else HEAD.
+COMMIT="${TRAUL_BUILD_COMMIT:-$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)}"
+
 build_all() {
   local dir="$1" pair
   mkdir -p "$dir"
   for pair in $TARGETS; do
     bun build --compile --external node-llama-cpp "--target=${pair%%:*}" \
+      --define "TRAUL_BUILD_COMMIT=\"$COMMIT\"" \
       src/index.triage.ts --outfile "$dir/${pair#*:}"
   done
 }

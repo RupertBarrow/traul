@@ -33,6 +33,16 @@ describe.skipIf(!supported)("compiled Triage executable (linux-x64)", () => {
     expect(r.stdout.toString()).toContain("Usage: traul");
   });
 
+  it("prints --contract from an empty environment", () => {
+    const r = Bun.spawnSync([exe, "--contract"], {
+      cwd: dir,
+      env: { TRAUL_HOME: join(dir, "home") },
+      stdout: "pipe", stderr: "pipe",
+    });
+    expect(r.exitCode).toBe(0);
+    expect(JSON.parse(r.stdout.toString())).toMatchObject({ contract: 1, readSchema: 1, connectors: ["imap"] });
+  });
+
   it("contains no googleapis, slack or discord code", () => {
     const bin = readFileSync(exe).toString("latin1");
     expect(bin.includes("googleapis")).toBe(false);

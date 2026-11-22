@@ -2,6 +2,7 @@
 import { bootstrap, runDatabaseFree, newProgram, registerReadCommands, registerMaintenanceCommands, registerDaemonCommands } from "./cli";
 import { registerWhatsAppCommands } from "./cli-whatsapp";
 import { registerImapCommands } from "./commands/imap";
+import { registerImportCommand } from "./commands/import";
 import { setConnectors } from "./connectors/registry";
 import { allConnectors } from "./connectors/all";
 
@@ -14,4 +15,5 @@ registerMaintenanceCommands(program, db);
 registerWhatsAppCommands(program, config);
 registerDaemonCommands(program, db, config);
 registerImapCommands(program, config);
+registerImportCommand(program, db);
 program.parse();

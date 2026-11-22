@@ -37,6 +37,7 @@ Sync messages from communication sources incrementally.
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
 - IMAP: read-only mail (`EXAMINE`, `BODY.PEEK`), cursors per folder on `UIDVALIDITY` and UID, budgets per run, backfill of stubs (see Connectors)
 - Reports messages added + contacts discovered per source
+- `--json` (imap only): prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
 
 ### `traul imap check --account <name> [--json]`
 
@@ -45,6 +46,18 @@ Connect, `LOGIN`, `EXAMINE` each configured folder (`LIST` for a pattern), `LOGO
 ### `traul imap folders --account <name> [--json]`
 
 Lists the folder names of an account: `{"account","folders":[...]}` (or `{"account","status"}` when it could not connect). Same exit codes and rules as `imap check`.
+
+### `traul --contract`
+
+Prints `{"contract":1,"readSchema":1,"version","commit","connectors":[...]}` and exits 0. Needs no database and no configuration. `commit` is stamped at build time (`dev` when run from source).
+
+### `traul embed [--limit <n>] [--json]`
+
+Embeds messages and chunks that have no vector yet (default limit 500, 0 = all). With `--json` it prints one value, `{"state","embedded","failed","pending","model","dims"}`, and nothing else on stdout. `state` is `ok`, `ollama_down`, `model_missing`, `dims_mismatch` or `ollama_remote`; a named state stops the run and nothing is stored for the failing batch. Exit 0 when it ran. traul never pulls a model.
+
+### `traul import --source imap --ndjson -`
+
+Reads NDJSON from stdin: `{"type":"message","source_id","subject","from","sent_at","account","folder","uidValidity","uid"}` is inserted as a stub (`metadata.stub` true; never over an existing row; `sent_at` is an ISO 8601 string or epoch seconds) and `{"type":"cursor","account","folder","uidValidity","lastUid"}` sets a folder cursor only where none exists. Prints `{"imported","existing","cursors"}`. One transaction: a bad line exits 2 with `line <n>: <problem>` on stderr and nothing is written. The next `sync imap` backfills the stubs.
 
 ### `traul search <query>`
 
@@ -69,6 +82,9 @@ Hybrid search combining vector similarity (semantic) and FTS5 keyword matching w
 | `--fts` | Keyword-only search (skip vector search) |
 | `--or` | Join terms with OR instead of AND (works with `--fts` and hybrid) |
 | `--like` | Substring match (LIKE) — bypasses FTS, useful for exact phrases |
+| `--envelope` | Output `{"vector":"ok"\|"unavailable"\|"model_missing","results":[{"id","source","source_id","sent_at","author","channel","snippet","rank"}]}` as one JSON value; `snippet` is at most 240 characters; words of the query are quoted (free text is not FTS syntax); exit 0 |
+| `--query-stdin` | Read the query from stdin (it never appears in a process list); the `<query>` argument is then omitted |
+| `--content` | With `--envelope`: add `content` (the full text) to each result |
 
 ### `traul get [thread-id]`
 

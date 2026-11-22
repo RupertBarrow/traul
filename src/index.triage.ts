@@ -2,6 +2,7 @@
 // connectors only (docs/triage-fork/SPEC.md, section 3).
 import { bootstrap, runDatabaseFree, newProgram, registerReadCommands, registerMaintenanceCommands, registerDaemonCommands } from "./cli";
 import { registerImapCommands } from "./commands/imap";
+import { registerImportCommand } from "./commands/import";
 import { setConnectors } from "./connectors/registry";
 import { triageConnectors } from "./connectors/triage";
 
@@ -13,4 +14,5 @@ registerReadCommands(program, db, config);
 registerMaintenanceCommands(program, db);
 registerDaemonCommands(program, db, config);
 registerImapCommands(program, config);
+registerImportCommand(program, db);
 program.parse();

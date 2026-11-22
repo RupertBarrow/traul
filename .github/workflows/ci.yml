@@ -32,4 +32,4 @@ jobs:
         run: TRAUL_BUILD_TARGETS="bun-linux-x64:traul-linux-x64" scripts/build-triage.sh "$RUNNER_TEMP/triage" --check
 
       - name: Compiled executable tests
-        run: bun test test/build
+        run: bun test test/build test/contract

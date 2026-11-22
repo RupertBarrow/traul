@@ -14,21 +14,37 @@ import { runGet } from "./commands/get";
 import { runReset } from "./commands/reset";
 import { runMigrations } from "./db/migrations";
 import { registerImapCommands } from "./commands/imap";
+import { registerImportCommand } from "./commands/import";
+import { runSyncJson } from "./commands/sync-json";
+import { runEmbedJson } from "./commands/embed-json";
+import { VERSION } from "./lib/version";
+import { checkReadSchema, contractInfo, DbNewerError } from "./lib/contract";
 
 /** Shared by both entry points (src/index.ts and src/index.triage.ts). */
 export function bootstrap(): { config: TraulConfig; db: TraulDB } {
   const config = loadConfig();
   ensureDbDir(config.database.path);
   const db = new TraulDB(config.database.path);
+  try {
+    checkReadSchema(db);
+  } catch (err) {
+    if (!(err instanceof DbNewerError)) throw err;
+    console.error(err.message);
+    process.exit(3);
+  }
   runMigrations(db);
   return { config, db };
 }
 
 /**
- * `traul imap ...` needs no database: run it before bootstrap() so that no database file is created.
+ * `traul --contract` and `traul imap ...` need no database: run it before bootstrap() so that no database file is created.
  * Returns true when it handled the command line.
  */
 export async function runDatabaseFree(argv: string[]): Promise<boolean> {
+  if (argv[2] === "--contract") {
+    process.stdout.write(JSON.stringify(contractInfo()) + "\n");
+    return true;
+  }
   if (argv[2] !== "imap") return false;
   const program = newProgram();
   registerImapCommands(program, loadConfig());
@@ -42,7 +58,7 @@ export function newProgram(): Command {
   program
     .name("traul")
     .description("Traul — Personal Intelligence Engine")
-    .version("0.2.0")
+    .version(VERSION)
     .option("-v, --verbose", "enable verbose output")
     .hook("preAction", () => {
       if (program.opts().verbose) {
@@ -58,8 +74,10 @@ export function registerReadCommands(program: Command, db: TraulDB, config: Trau
     .command("sync")
     .description("Sync messages from communication sources")
     .argument("[source]", "source to sync (e.g. slack)")
-    .action(async (source?: string) => {
-      await runSync(db, config, source);
+    .option("--json", "print one JSON report on stdout (imap only; logs go to stderr)")
+    .action(async (source: string | undefined, options) => {
+      if (options.json) process.exitCode = await runSyncJson(db, config, source);
+      else await runSync(db, config, source);
       db.close();
     });
 
@@ -68,7 +86,7 @@ export function registerReadCommands(program: Command, db: TraulDB, config: Trau
     .description(
       "Search messages (hybrid vector+keyword by default, requires Ollama)"
     )
-    .argument("<query>", "search query (natural language or keywords)")
+    .argument("[query]", "search query (natural language or keywords)")
     .option("-s, --source <source>", "filter by source")
     .option("-c, --channel <channel>", "filter by channel name")
     .option("-a, --after <date>", "messages after date (ISO 8601)")
@@ -83,12 +101,15 @@ export function registerReadCommands(program: Command, db: TraulDB, config: Trau
       "--fts",
       "keyword-only search (FTS5/BM25, no vector search). Faster but requires all terms to match — use hybrid for multi-word or exploratory queries"
     )
+    .option("--envelope", "output {vector, results} as one JSON value (Triage contract)")
+    .option("--query-stdin", "read the query from stdin, not from the command line")
+    .option("--content", "with --envelope: add the full text of each result")
     .option("--or", "join search terms with OR instead of AND (use with --fts)")
     .option(
       "--like",
       "substring match (LIKE) — bypasses FTS, useful for exact phrases"
     )
-    .action(async (query: string, options) => {
+    .action(async (query: string | undefined, options) => {
       options.after = options.after || options.from || options.start;
       options.before = options.before || options.to || options.end;
       await runSearch(db, query, options);
@@ -156,9 +177,11 @@ export function registerMaintenanceCommands(program: Command, db: TraulDB): void
     .description("Generate vector embeddings for messages (requires Ollama)")
     .option("-l, --limit <n>", "max messages to embed per run (0 = all)", "500")
     .option("-q, --quiet", "minimal output")
+    .option("--json", "print one JSON value {state, embedded, failed, pending, model, dims}")
     .option("--rechunk", "re-chunk long messages that were embedded whole (pre-chunking)")
     .action(async (options) => {
-      await runEmbed(db, options);
+      if (options.json) await runEmbedJson(db, options);
+      else await runEmbed(db, options);
       db.close();
     });
 
