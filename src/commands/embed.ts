@@ -1,6 +1,10 @@
 import type { TraulDB } from "../db/database";
 import { embedBatch, vecToBytes, BATCH_SIZE } from "../lib/embeddings";
+import { OllamaError, type OllamaFailure } from "../lib/ollama";
 import { shouldChunk, chunkText, CHUNK_THRESHOLD } from "../lib/chunker";
+
+/** What a run did, for `embed --json`; `code` is the first named Ollama state met (the run stops there). */
+export interface EmbedOutcome { embedded: number; failed: number; code?: OllamaFailure }
 
 function formatDuration(ms: number): string {
   const secs = Math.floor(ms / 1000);
@@ -20,6 +24,7 @@ async function embedItems(
   quiet: boolean,
   chunkFn?: (id: number, content: string) => void,
   onBatchDone?: (done: number, failed: number) => void,
+  outcome?: EmbedOutcome,
 ): Promise<{ done: number; failed: number; elapsed: number }> {
   let done = 0;
   let failed = 0;
@@ -66,6 +71,7 @@ async function embedItems(
       }
     } catch (err) {
       failed += batch.length;
+      if (err instanceof OllamaError && outcome) outcome.code = err.code;
       if (!quiet) {
         const errMsg = err instanceof Error ? err.message : String(err);
         process.stderr.write(`\n  ! ${label} batch at ${i}: ${errMsg}\n`);
@@ -73,6 +79,7 @@ async function embedItems(
     }
 
     onBatchDone?.(done, failed);
+    if (outcome?.code) break; // a named state (Ollama down, model missing...) will repeat for every batch
 
     if (!quiet) {
       const elapsed = Date.now() - startTime;
@@ -100,7 +107,8 @@ async function embedItems(
 export async function runEmbed(
   db: TraulDB,
   options: { limit?: string; quiet?: boolean; rechunk?: boolean; onProgress?: (pct: number, eta: string | null) => void }
-): Promise<void> {
+): Promise<EmbedOutcome> {
+  const outcome: EmbedOutcome = { embedded: 0, failed: 0 };
   const parsed = options.limit ? parseInt(options.limit, 10) : 500;
   const batchLimit = parsed === 0 ? 999999 : parsed;
 
@@ -161,7 +169,10 @@ export async function runEmbed(
         db.replaceChunks(id, chunks);
       },
       (done, failed) => { doneTotal = done + failed; reportProgress(); },
+      outcome,
     );
+    outcome.embedded += r.done;
+    outcome.failed += r.failed;
     remaining -= r.done + r.failed;
     doneTotal = r.done + r.failed;
     reportProgress();
@@ -173,7 +184,7 @@ export async function runEmbed(
   }
 
   // Embed chunks with remaining budget (re-fetch since chunking may have created new ones)
-  if (remaining > 0) {
+  if (remaining > 0 && !outcome.code) {
     const chunks = db.getUnembeddedChunks(remaining);
     if (chunks.length > 0) {
       const msgDone = doneTotal;
@@ -184,7 +195,10 @@ export async function runEmbed(
         !!options.quiet,
         undefined,
         (done, failed) => { doneTotal = msgDone + done + failed; reportProgress(); },
+        outcome,
       );
+      outcome.embedded += r.done;
+      outcome.failed += r.failed;
       doneTotal = msgDone + r.done + r.failed;
       reportProgress();
       if (!options.quiet) {
@@ -200,4 +214,5 @@ export async function runEmbed(
     const updatedChunks = db.getChunkEmbeddingStats();
     console.log(`Total: ${updated.embedded_messages}/${updated.total_messages} messages, ${updatedChunks.embedded_chunks}/${updatedChunks.total_chunks} chunks`);
   }
+  return outcome;
 }

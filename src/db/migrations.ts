@@ -1,6 +1,6 @@
 import type { TraulDB } from "./database";
 import { CHUNKER_VERSION } from "../lib/chunker";
-import { EMBED_MODEL, EMBED_DIMS } from "../lib/embeddings";
+import { getEmbedSettings } from "../lib/embed-config";
 import * as log from "../lib/logger";
 
 export interface MigrationResult {
@@ -20,6 +20,7 @@ export function runMigrations(db: TraulDB): MigrationResult {
   const storedEmbedModel = db.getMeta("embed_model");
   const storedEmbedDims = db.getMeta("embed_dims");
 
+  const { model: EMBED_MODEL, dims: EMBED_DIMS } = getEmbedSettings();
   const currentDims = String(EMBED_DIMS);
 
   // Chunker version change → reset chunks + embeddings + markdown cursors

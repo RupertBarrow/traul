@@ -1,7 +1,43 @@
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { dirname } from "path";
+import { configPath, dbPath, ensureDir } from "./paths";
 import { DEFAULT_PORT, DEFAULT_EMBED_INTERVAL, type DaemonConfig, type DaemonIntervals } from "../daemon/types";
+
+export interface EmbeddingsConfig {
+  backend: "ollama" | "llama";
+  url: string;
+  /** Empty means the backend's default model. */
+  model: string;
+  dims: number;
+  keep_alive: string;
+  timeout_ms: number;
+  /** Honoured from the config file only, never from the environment. */
+  allow_remote: boolean;
+}
+
+export interface ImapAccount {
+  name: string;
+  host: string;
+  port?: number;
+  /** implicit (default), starttls, or plain (loopback hosts only). */
+  tls?: "implicit" | "starttls" | "plain";
+  user: string;
+  /** NAME of the secret (environment variable or Keychain account); the file never holds a password. */
+  password_secret: string;
+  /** Names or patterns (`*`, `?`, `/` as the separator); absent means INBOX. */
+  folders?: string[];
+}
+
+export interface ImapConfig {
+  keychain_service: string;
+  sync_start: string;
+  max_body_bytes: number;
+  max_text_chars: number;
+  max_messages_per_run: number;
+  max_run_seconds: number;
+  backfill_per_run: number;
+  accounts: ImapAccount[];
+}
 
 export interface TraulConfig {
   sync_start: string;
@@ -54,17 +90,22 @@ export interface TraulConfig {
       stoplist: string[];
     };
   };
+  imap: ImapConfig;
+  embeddings: EmbeddingsConfig;
   daemon: DaemonConfig;
 }
 
-const CONFIG_DIR = join(homedir(), ".config", "traul");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
-const DEFAULT_DB_PATH = join(homedir(), ".local", "share", "traul", "traul.db");
+export function defaultImapConfig(): ImapConfig {
+  return {
+    keychain_service: "", sync_start: "", max_body_bytes: 262144, max_text_chars: 100000,
+    max_messages_per_run: 100, max_run_seconds: 120, backfill_per_run: 50, accounts: [],
+  };
+}
 
 function getDefaultConfig(): TraulConfig {
   return {
     sync_start: "",
-    database: { path: DEFAULT_DB_PATH },
+    database: { path: dbPath() },
     slack: { token: "", cookie: "", my_user_id: "", channels: [] },
     telegram: { api_id: "", api_hash: "", session_path: "", chats: [] },
     linear: { api_key: "", teams: [], workspaces: [] },
@@ -75,6 +116,11 @@ function getDefaultConfig(): TraulConfig {
       token: "",
       servers: { allowlist: [], stoplist: [] },
       channels: { allowlist: [], stoplist: [] },
+    },
+    imap: defaultImapConfig(),
+    embeddings: {
+      backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
+      keep_alive: "60s", timeout_ms: 30000, allow_remote: false,
     },
     daemon: { port: DEFAULT_PORT, intervals: { embed: DEFAULT_EMBED_INTERVAL } },
   };
@@ -102,9 +148,10 @@ export function loadConfig(): TraulConfig {
   const defaults = getDefaultConfig();
 
   let parsed: any = {};
-  if (existsSync(CONFIG_PATH)) {
+  const cfgPath = configPath();
+  if (existsSync(cfgPath)) {
     try {
-      const raw = readFileSync(CONFIG_PATH, "utf-8");
+      const raw = readFileSync(cfgPath, "utf-8");
       parsed = JSON.parse(raw);
       _rawParsed = parsed;
       deepMerge(defaults, parsed);
@@ -230,16 +277,14 @@ export function setRawParsedConfig(val: Record<string, any>): void {
 }
 
 export function ensureDbDir(dbPath: string): void {
-  const dir = join(dbPath, "..");
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  ensureDir(dirname(dbPath));
 }
 
 export function saveDefaultConfig(): void {
-  if (!existsSync(CONFIG_PATH)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
-    writeFileSync(CONFIG_PATH, JSON.stringify(getDefaultConfig(), null, 2));
+  const cfgPath = configPath();
+  if (!existsSync(cfgPath)) {
+    ensureDir(dirname(cfgPath));
+    writeFileSync(cfgPath, JSON.stringify(getDefaultConfig(), null, 2));
   }
 }
 

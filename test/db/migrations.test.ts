@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { TraulDB } from "../../src/db/database";
 import { runMigrations, type MigrationResult } from "../../src/db/migrations";
 import { CHUNKER_VERSION } from "../../src/lib/chunker";
-import { EMBED_MODEL, EMBED_DIMS } from "../../src/lib/embeddings";
+import { getEmbedSettings, resolveEmbedSettings, _setEmbedSettings } from "../../src/lib/embed-config";
+
+const EMBED_MODEL = getEmbedSettings().model;
+const EMBED_DIMS = getEmbedSettings().dims;
 
 describe("runMigrations", () => {
   let db: TraulDB;
@@ -97,5 +100,49 @@ describe("runMigrations", () => {
     expect(result.embeddingsReset).toBe(false);
     expect(result.syncCursorsReset).toBe(false);
     expect(db.getSyncCursor("slack", "channel:C1")).toBe("ts1");
+  });
+
+  // FT-5: the model and the dimensions come from the configuration.
+  describe("configured model and dimensions", () => {
+    afterEach(() => _setEmbedSettings(null));
+
+    const vecDims = (d: TraulDB): number => {
+      const row = d.db
+        .query<{ sql: string }, []>("SELECT sql FROM sqlite_master WHERE name = 'vec_messages'")
+        .get();
+      return Number(/float\[(\d+)\]/.exec(row!.sql)![1]);
+    };
+
+    const withSettings = (over: Record<string, unknown>) =>
+      _setEmbedSettings(resolveEmbedSettings(over as any, {}));
+
+    it("creates the vector tables with the configured dimensions", () => {
+      withSettings({ dims: 768 });
+      expect(vecDims(new TraulDB(":memory:"))).toBe(768);
+    });
+
+    it("a changed model resets the embeddings", () => {
+      runMigrations(db);
+      withSettings({ model: "another-embed:1b" });
+      const result = runMigrations(db);
+      expect(result.embeddingsReset).toBe(true);
+      expect(db.getMeta("embed_model")).toBe("another-embed:1b");
+    });
+
+    it("a changed dimension count rebuilds the vector tables and records it", () => {
+      runMigrations(db);
+      expect(vecDims(db)).toBe(EMBED_DIMS);
+      withSettings({ dims: 512 });
+      const result = runMigrations(db);
+      expect(result.embeddingsReset).toBe(true);
+      expect(vecDims(db)).toBe(512);
+      expect(db.getMeta("embed_dims")).toBe("512");
+    });
+
+    it("an unchanged configuration resets nothing", () => {
+      withSettings({ dims: 512, model: "m" });
+      runMigrations(db);
+      expect(runMigrations(db).embeddingsReset).toBe(false);
+    });
   });
 });

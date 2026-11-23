@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join, basename } from "path";
-import { homedir } from "os";
+import { homeDir } from "../lib/paths";
 import type { Connector, SyncResult } from "./types";
 import type { TraulDB } from "../db/database";
 import type { TraulConfig } from "../lib/config";
@@ -8,7 +8,7 @@ import { getSyncStartTimestamp } from "../lib/config";
 import { shouldChunk, chunkText } from "../lib/chunker";
 import * as log from "../lib/logger";
 
-const PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const PROJECTS_DIR = join(homeDir(), ".claude", "projects");
 
 interface SessionMessage {
   type: string;

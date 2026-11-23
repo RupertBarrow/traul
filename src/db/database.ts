@@ -61,7 +61,7 @@ export class TraulDB {
     sent_at: number;
     metadata?: string;
   }): void {
-    this.db.run(Q.UPSERT_MESSAGE, [
+    this.db.run(msg.source === "imap" ? Q.UPSERT_MESSAGE_IMAP : Q.UPSERT_MESSAGE, [
       msg.source,
       msg.source_id,
       msg.channel_id ?? null,
@@ -837,6 +837,26 @@ export class TraulDB {
       )
       .get(key);
     return row?.value ?? null;
+  }
+
+  deleteMeta(key: string): void {
+    this.db.run("DELETE FROM traul_meta WHERE key = ?", [key]);
+  }
+
+  /** Run `fn` in one transaction: everything it writes is kept, or nothing is. */
+  inTransaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
+  /** Stub rows of one imap folder at one UIDVALIDITY (see docs/triage-fork/SPEC.md, 5.5). */
+  getImapStubs(account: string, folder: string, uidValidity: number, limit: number): Array<{ source_id: string; metadata: string }> {
+    return this.db
+      .query<{ source_id: string; metadata: string }, [string, string, number, number]>(Q.GET_IMAP_STUBS)
+      .all(account, folder, uidValidity, limit);
+  }
+
+  markImapStubGone(sourceId: string): void {
+    this.db.run(Q.MARK_IMAP_STUB_GONE, [sourceId]);
   }
 
   setMeta(key: string, value: string): void {

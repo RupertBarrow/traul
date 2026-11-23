@@ -1,5 +1,4 @@
 import { join } from "path";
-import { homedir } from "os";
 import type { TraulDB } from "../db/database";
 import { loadConfig, type TraulConfig } from "../lib/config";
 import { Scheduler } from "../daemon/scheduler";
@@ -9,10 +8,10 @@ import { GRACEFUL_SHUTDOWN_MS } from "../daemon/types";
 import { getConnector, getConnectorNames, getCredsStatus } from "../connectors/registry";
 import { runEmbed } from "./embed";
 import * as log from "../lib/logger";
+import { pidPath, logPath } from "../lib/paths";
 
-const DATA_DIR = join(homedir(), ".local", "share", "traul");
-const PID_PATH = join(DATA_DIR, "daemon.pid");
-const LOG_PATH = join(DATA_DIR, "daemon.log");
+const PID_PATH = pidPath();
+const LOG_PATH = logPath();
 
 export async function runDaemonStart(
   db: TraulDB,

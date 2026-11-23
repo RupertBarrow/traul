@@ -1,6 +1,6 @@
 ---
 name: traul
-description: Personal Intelligence Engine CLI for syncing, searching, and monitoring messages from Slack, Telegram, Discord, Linear, Gmail, Claude Code sessions, Markdown files, and WhatsApp. Use when working with traul commands, message sync, search, signals, briefings, or browsing chat history.
+description: Personal Intelligence Engine CLI for syncing, searching, and monitoring messages from Slack, Telegram, Discord, Linear, Gmail, IMAP mail, Claude Code sessions, Markdown files, and WhatsApp. Use when working with traul commands, message sync, search, signals, briefings, or browsing chat history.
 allowed-tools:
   - Bash
   - Read
@@ -14,7 +14,7 @@ allowed-tools:
 
 CLI tool that watches communication streams (Slack, Telegram, Discord, Linear, Gmail, Claude Code sessions, Markdown files, WhatsApp), indexes messages, detects patterns via signals, and surfaces actionable insights.
 
-**Runtime:** Bun + TypeScript | **DB:** SQLite (WAL mode, FTS5, sqlite-vec) | **Embeddings:** node-llama-cpp (Qwen3-Embedding-0.6B), Ollama fallback | **Version:** 0.2.0
+**Runtime:** Bun + TypeScript | **DB:** SQLite (WAL mode, FTS5, sqlite-vec) | **Embeddings:** Ollama (qwen3-embedding:0.6b, the fork default) or node-llama-cpp, chosen by configuration | **Version:** 0.2.0
 
 **Project:** `/Users/dandaka/projects/traul`
 
@@ -28,21 +28,43 @@ Sync messages from communication sources incrementally.
 
 | Argument | Description |
 |----------|-------------|
-| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
+| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
 
 - Uses cursor-based incremental sync (only fetches new messages)
 - Slack: syncs channels + thread replies, caches user profiles, stores reactions/reply_count in metadata
 - Telegram: syncs via `tg.py` (Telethon), 1-hour cooldown skip per chat, progress reporting every 10s
 - Claude Code: reads all JSONL sessions from `~/.claude/projects/`, extracts user+assistant messages
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
+- IMAP: read-only mail (`EXAMINE`, `BODY.PEEK`), cursors per folder on `UIDVALIDITY` and UID, budgets per run, backfill of stubs (see Connectors)
 - Reports messages added + contacts discovered per source
+- `--json` (imap only): prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
+
+### `traul imap check --account <name> [--json]`
+
+Connect, `LOGIN`, `EXAMINE` each configured folder (`LIST` for a pattern), `LOGOUT`. Fetches nothing and opens no database (no database file is created). Prints `{"account","status"}`; `status` is `ok` or one of `auth_failed`, `unreachable`, `tls_error`, `timeout`, `folder_failed`, `no_secret`, `protocol`. Without `--json` it prints `<account>: <status>`. Exit 0 when it ran (read the status); exit 2 for a bad configuration or an unknown account. Never prints a host, a user or a server line.
+
+### `traul imap folders --account <name> [--json]`
+
+Lists the folder names of an account: `{"account","folders":[...]}` (or `{"account","status"}` when it could not connect). Same exit codes and rules as `imap check`.
+
+### `traul --contract`
+
+Prints `{"contract":1,"readSchema":1,"version","commit","connectors":[...]}` and exits 0. Needs no database and no configuration. `commit` is stamped at build time (`dev` when run from source).
+
+### `traul embed [--limit <n>] [--json]`
+
+Embeds messages and chunks that have no vector yet (default limit 500, 0 = all). With `--json` it prints one value, `{"state","embedded","failed","pending","model","dims"}`, and nothing else on stdout. `state` is `ok`, `ollama_down`, `model_missing`, `dims_mismatch` or `ollama_remote`; a named state stops the run and nothing is stored for the failing batch. Exit 0 when it ran. traul never pulls a model.
+
+### `traul import --source imap --ndjson -`
+
+Reads NDJSON from stdin: `{"type":"message","source_id","subject","from","sent_at","account","folder","uidValidity","uid"}` is inserted as a stub (`metadata.stub` true; never over an existing row; `sent_at` is an ISO 8601 string or epoch seconds) and `{"type":"cursor","account","folder","uidValidity","lastUid"}` sets a folder cursor only where none exists. Prints `{"imported","existing","cursors"}`. One transaction: a bad line exits 2 with `line <n>: <problem>` on stderr and nothing is written. The next `sync imap` backfills the stubs.
 
 ### `traul search <query>`
 
 Hybrid search combining vector similarity (semantic) and FTS5 keyword matching with Reciprocal Rank Fusion. Falls back to FTS-only if embedding is unavailable.
 
 **Search modes:**
-- **Hybrid (default)** — best for multi-word and exploratory queries. Finds semantically related messages even when exact keywords don't appear. Uses node-llama-cpp with Qwen3-Embedding-0.6B (auto-downloads ~639MB model on first use). Falls back to Ollama, then FTS-only. Prints coverage ratio to stderr (e.g. `88% vector, 12% FTS`).
+- **Hybrid (default)** — best for multi-word and exploratory queries. Finds semantically related messages even when exact keywords don't appear. Embeds the query through the configured backend (Ollama by default; see Embeddings configuration). There is no fall-through from one backend to the other; if embedding is unavailable it falls back to FTS-only. Prints coverage ratio to stderr (e.g. `88% vector, 12% FTS`).
 - **FTS-only (`--fts`)** — keyword matching with BM25 ranking. Faster, but requires ALL terms to match (implicit AND). Brittle with multi-word queries, especially combined with source/channel filters.
 - **OR mode (`--or`)** — joins search terms with OR instead of AND. Works with both `--fts` and hybrid. Use for broad exploratory queries where any term is relevant.
 - **Substring (`--like`)** — bypasses FTS entirely, uses SQL LIKE. Useful for exact phrases that FTS tokenization breaks (e.g. "how do I").
@@ -60,6 +82,9 @@ Hybrid search combining vector similarity (semantic) and FTS5 keyword matching w
 | `--fts` | Keyword-only search (skip vector search) |
 | `--or` | Join terms with OR instead of AND (works with `--fts` and hybrid) |
 | `--like` | Substring match (LIKE) — bypasses FTS, useful for exact phrases |
+| `--envelope` | Output `{"vector":"ok"\|"unavailable"\|"model_missing","results":[{"id","source","source_id","sent_at","author","channel","snippet","rank"}]}` as one JSON value; `snippet` is at most 240 characters; words of the query are quoted (free text is not FTS syntax); exit 0 |
+| `--query-stdin` | Read the query from stdin (it never appears in a process list); the `<query>` argument is then omitted |
+| `--content` | With `--envelope`: add `content` (the full text) to each result |
 
 ### `traul get [thread-id]`
 
@@ -246,6 +271,21 @@ All `--json` outputs use clean, normalized field names (not raw SQL column names
 - **Cursors:** Stored per-workspace+team as `<workspace>:team:<id>` or `<workspace>:all`
 - **Multi-workspace:** All `LINEAR_API_KEY_*` env vars are auto-discovered as separate workspaces
 
+### IMAP
+
+Read-only mail (docs/triage-fork/SPEC.md, section 5). Message text is stored in `messages`.
+
+- **Auth:** by NAME. Each account has `password_secret`, matching `^[A-Za-z0-9._-]+$`: the environment variable of that name if set and non-empty; else, on macOS with a non-empty `imap.keychain_service`, `/usr/bin/security find-generic-password -s <service> -a <name> -w` (5 s, no shell); else the status `no_secret`. The config file never holds a password, and nothing writes the Keychain.
+- **Config:** `imap.keychain_service`, `sync_start`, `max_body_bytes` (262144), `max_text_chars` (100000), `max_messages_per_run` (100), `max_run_seconds` (120), `backfill_per_run` (50), `accounts[]` each with `name`, `host`, `port` (993; 143 for `starttls` and `plain`), `tls` (`implicit` default, `starttls`, or `plain` for a loopback host only; `plain_remote` otherwise), `user`, `password_secret`, `folders[]` (names or patterns with `*` and `?`, `/` as the separator whatever the server uses; absent means `INBOX`).
+- **Read-only by construction:** the only verbs sent are `CAPABILITY`, `STARTTLS`, `LOGIN`, `LIST`, `EXAMINE`, `UID SEARCH`, `UID FETCH` (with `BODY.PEEK` only) and `LOGOUT`.
+- **TLS:** the certificate is verified for every host except a loopback one (a local bridge serves a self-signed certificate). The server name is sent for a host name only, never for an IP address. `LOGIN` is never sent before a `STARTTLS` upgrade, nor on a `plain` session that advertises `LOGINDISABLED`.
+- **Stored:** `source` `imap`; `source_id` `mid:<Message-ID without angle brackets>`, or without one `imap:<account>:<folder>:<uidValidity>:<uid>` (the same key as Triage's, shared vectors in `test/fixtures/triage-keys.json`); `channel_id` the account; `channel_name` `<account>/<folder>`; `thread_id` first of `References`, else `In-Reply-To`, else the Message-ID; `author_id`/`author_name` from `From` (RFC 2047 decoded); `content` the subject, a blank line, the text (the subject alone when there is no text part); `sent_at` the `Date` header, else `INTERNALDATE`; `metadata` `{"v":1,"account","folder","uidValidity","uid","messageId","subject","from","to","date","listUnsubscribe","listId","truncated"?,"stub"?}`.
+- **Text:** `text/plain`, else `text/html` through `html-to-text`; attachments and other types are skipped; base64 and quoted-printable; charsets through `TextDecoder` (ISO-8859-1 and -15 as windows-1252 with the eight differing code points mapped); cut at `max_text_chars`; a part cut by the partial fetch sets `truncated`. The upsert for this source updates every column on conflict, but a stub never replaces a full message.
+- **Cursors:** `sync_cursors` source `imap`, key `<account>|<folder>`, value `{"uidValidity":N,"lastUid":M}`. A `UIDVALIDITY` other than the cursor's resets it. The row and the cursor move in one transaction. A UID whose fetch fails stops the folder; the same UID failing three runs in a row (counted in `traul_meta`, key `imap_fail:...`) is skipped.
+- **Backfill:** with budget left, up to `backfill_per_run` rows of the account whose `metadata.stub` is `true` and whose locator matches the folder's current `UIDVALIDITY` are fetched by UID; the fetched message must yield the stub's `source_id`, then it replaces the stub. A UID that is gone, or another message, sets `stub` to `"gone"`.
+- **Budget:** `max_messages_per_run` and `max_run_seconds` are shared by the accounts in turn; what is left waits for the next run.
+- **Logs:** counts and codes only, never a subject, an address or text.
+
 ### Claude Code
 
 - **Auth:** None required (reads local files)
@@ -314,6 +354,30 @@ FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
 
 **File:** `~/.config/traul/config.json`
 
+**Paths and SQLite from the environment** (for running inside an app):
+
+| Variable | Meaning |
+|---|---|
+| `TRAUL_HOME` | Folder for the database, pid file and log (default `~/.local/share/traul`). Created 0700; the database file is 0600. |
+| `TRAUL_CONFIG_PATH` | Config file (default `~/.config/traul/config.json`) |
+| `TRAUL_DB_PATH` | Database file (default `$TRAUL_HOME/traul.db`) |
+| `TRAUL_SQLITE_LIB` | SQLite library to load (macOS: default is Homebrew's, Apple Silicon then Intel) |
+| `TRAUL_SQLITE_VEC` | Path of the sqlite-vec extension, loaded instead of the bundled package |
+
+**Embeddings configuration** (fork change: the default backend is now Ollama, not node-llama-cpp):
+
+```json
+"embeddings": { "backend": "ollama", "url": "http://127.0.0.1:11434", "model": "qwen3-embedding:0.6b",
+                "dims": 1024, "keep_alive": "60s", "timeout_ms": 30000, "allow_remote": false }
+```
+
+- `backend`: `ollama` (default) or `llama`. `node-llama-cpp` is an optional dependency, loaded only for `llama`. A failing backend is an error; traul never switches to the other one.
+- Environment overrides: `TRAUL_OLLAMA_URL` (then `OLLAMA_URL`), `TRAUL_EMBED_MODEL`, `TRAUL_EMBED_DIMS`.
+- Loopback only: the URL host must be `localhost`, `127.0.0.0/8` or `::1`, else the error `ollama_remote` and no request. Only `allow_remote: true` in the config file lifts this (no environment variable can).
+- The vector tables are created with `dims`. Changing `model` or `dims` resets the embeddings on the next start; re-embed with `traul embed`.
+- traul never pulls or substitutes a model. Named states: `model_missing`, `ollama_down` (refused connection or timeout), `dims_mismatch` (a vector of another length; nothing is stored), `ollama_remote`.
+- Queries get the instruction prefix for Qwen embedding models.
+
 ```json
 {
   "sync_start": "2025-01-01",
@@ -341,6 +405,17 @@ FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
 }
 ```
 
+```json
+"imap": {
+  "keychain_service": "", "sync_start": "2026-09-01", "max_body_bytes": 262144, "max_text_chars": 100000,
+  "max_messages_per_run": 100, "max_run_seconds": 120, "backfill_per_run": 50,
+  "accounts": [
+    { "name": "personal", "host": "imap.example.org", "port": 993, "tls": "implicit",
+      "user": "me@example.org", "password_secret": "IMAP_PASSWORD_PERSONAL", "folders": ["INBOX"] }
+  ]
+}
+```
+
 ENV vars override config values. Empty `channels`/`chats` arrays = sync all.
 
 ---
@@ -353,11 +428,11 @@ src/
   commands/                 # Command handlers
     sync.ts, search.ts, messages.ts, channels.ts, get.ts, signals.ts, briefing.ts, sql.ts
   connectors/               # Source adapters
-    types.ts, slack.ts, telegram.ts, linear.ts, claude-code.ts, markdown.ts
+    types.ts, slack.ts, telegram.ts, linear.ts, claude-code.ts, markdown.ts, imap.ts, imap-sync.ts
   db/                       # Data layer
     schema.ts, database.ts, queries.ts
   lib/                      # Utilities
-    config.ts, logger.ts, formatter.ts
+    config.ts, logger.ts, formatter.ts, secrets.ts, mime.ts, imap/ (protocol.ts, session.ts)
   signals/                  # Signal engine
     types.ts, evaluator.ts, definitions/stale-threads.ts
 ```

@@ -1,34 +1,14 @@
-import { readdirSync } from "fs";
-import { join } from "path";
 import type { Connector } from "./types";
 import type { TraulConfig } from "../lib/config";
 
-const SKIP_FILES = new Set(["types.ts", "registry.ts"]);
-const connectorDir = join(import.meta.dir);
+let _connectors: Connector[] = [];
 
-let _connectors: Connector[] | null = null;
+/** Register the connectors this executable runs (see src/index.ts, src/index.triage.ts). */
+export function setConnectors(list: Connector[]): void {
+  _connectors = [...list];
+}
 
-/** Load all connectors from src/connectors/*.ts (excluding types.ts and registry.ts) */
 export function getConnectors(): Connector[] {
-  if (_connectors) return _connectors;
-
-  _connectors = [];
-  const files = readdirSync(connectorDir)
-    .filter((f) => f.endsWith(".ts") && !SKIP_FILES.has(f))
-    .sort();
-
-  for (const file of files) {
-    const mod = require(join(connectorDir, file));
-    // Find the export that matches the Connector interface
-    for (const key of Object.keys(mod)) {
-      const val = mod[key];
-      if (val && typeof val === "object" && typeof val.name === "string" && typeof val.sync === "function") {
-        _connectors.push(val);
-        break;
-      }
-    }
-  }
-
   return _connectors;
 }
 

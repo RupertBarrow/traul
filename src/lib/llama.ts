@@ -1,4 +1,6 @@
-import { getLlama, LlamaLogLevel, resolveModelFile, type Llama, type LlamaModel, type LlamaEmbeddingContext } from "node-llama-cpp";
+import type { Llama, LlamaModel, LlamaEmbeddingContext } from "node-llama-cpp";
+import { homeDir } from "./paths";
+import { getEmbedSettings } from "./embed-config";
 import { formatQuery, formatDoc } from "./llama-format";
 export { isQwenEmbeddingModel, formatQuery, formatDoc } from "./llama-format";
 
@@ -7,10 +9,10 @@ export { isQwenEmbeddingModel, formatQuery, formatDoc } from "./llama-format";
 // Duplicated from embeddings.ts to avoid circular import
 const MAX_TEXT_LENGTH = 4000;
 
-const DEFAULT_MODEL = "hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf";
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-export const LLAMA_EMBED_MODEL = process.env.TRAUL_EMBED_MODEL ?? DEFAULT_MODEL;
+/** The model URI, from the configuration (TRAUL_EMBED_MODEL, embeddings.model). */
+const llamaModel = (): string => getEmbedSettings().model;
 
 // --- Singleton state ---
 let llama: Llama | null = null;
@@ -44,13 +46,15 @@ async function getContext(): Promise<LlamaEmbeddingContext> {
     return ctx;
   }
 
+  // Dynamic, so a compiled executable that never uses llama never resolves the package.
+  const { getLlama, LlamaLogLevel, resolveModelFile } = await import("node-llama-cpp");
   if (!llama) {
     llama = await getLlama({ logLevel: LlamaLogLevel.error });
   }
 
   if (!model) {
-    const modelPath = await resolveModelFile(LLAMA_EMBED_MODEL, {
-      directory: `${process.env.HOME}/.cache/traul/models`,
+    const modelPath = await resolveModelFile(llamaModel(), {
+      directory: `${homeDir()}/.cache/traul/models`,
       onProgress: ({ totalSize, downloadedSize }) => {
         const pct = totalSize > 0 ? Math.round((downloadedSize / totalSize) * 100) : 0;
         process.stderr.write(`\rDownloading model: ${pct}%`);
@@ -99,7 +103,7 @@ export async function embedDoc(text: string): Promise<Float32Array> {
 
 export async function embedQuery(text: string): Promise<Float32Array> {
   const embCtx = await getContext();
-  return embedSingle(embCtx, formatQuery(text, LLAMA_EMBED_MODEL));
+  return embedSingle(embCtx, formatQuery(text, llamaModel()));
 }
 
 export async function embedDocBatch(

@@ -44,7 +44,7 @@ bun install
 bun link
 ```
 
-**Requirements:** [Bun](https://bun.sh) v1.0+, SQLite with development headers, optionally [Ollama](https://ollama.com) for vector search.
+**Requirements:** [Bun](https://bun.sh) v1.0+, SQLite with development headers, optionally [Ollama](https://ollama.com) for vector search (this fork's default embedding backend; `node-llama-cpp` is optional and selected with `embeddings.backend: "llama"`).
 
 **SQLite setup by platform:**
 
