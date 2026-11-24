@@ -40,7 +40,7 @@ describe.skipIf(!supported)("compiled Triage executable (linux-x64)", () => {
       stdout: "pipe", stderr: "pipe",
     });
     expect(r.exitCode).toBe(0);
-    expect(JSON.parse(r.stdout.toString())).toMatchObject({ contract: 1, readSchema: 1, connectors: ["imap"] });
+    expect(JSON.parse(r.stdout.toString())).toMatchObject({ contract: 1, readSchema: 1, connectors: ["imap", "archive"] });
   });
 
   it("contains no googleapis, slack or discord code", () => {

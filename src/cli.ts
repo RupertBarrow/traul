@@ -74,7 +74,7 @@ export function registerReadCommands(program: Command, db: TraulDB, config: Trau
     .command("sync")
     .description("Sync messages from communication sources")
     .argument("[source]", "source to sync (e.g. slack)")
-    .option("--json", "print one JSON report on stdout (imap only; logs go to stderr)")
+    .option("--json", "print one JSON report on stdout (imap and archive only; logs go to stderr)")
     .action(async (source: string | undefined, options) => {
       if (options.json) process.exitCode = await runSyncJson(db, config, source);
       else await runSync(db, config, source);

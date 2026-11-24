@@ -28,7 +28,7 @@ Triage keeps classification, labels, its console and its mail actions. Nothing o
 | F5 | IMAP protocol and MIME | `src/lib/imap/protocol.ts`, `src/lib/imap/session.ts`, `src/lib/mime.ts`, `src/lib/mime-words.ts` (new) | - |
 | F6 | The `imap` connector and `traul imap check` | `src/connectors/imap.ts`, `src/connectors/imap-sync.ts`, `src/commands/imap.ts` (new), `src/lib/config.ts`, `src/db/queries.ts`, `src/db/database.ts` | F4, F5 |
 | F7 | The Triage contract: `--contract`, `sync --json`, `search --envelope`, `embed --json`, `import` | `src/commands/{sync,search,embed,import}.ts`, `src/index.ts`, `skill.md`, `docs/triage-fork/CONTRACT.md` (new) | F3, F6 |
-| F8 | (deferred, needs the owner's go) the `archive` connector | section 7 | F4 |
+| F8 | The `archive` connector (Archibald's intakes) | section 7 | F1, F7 |
 
 ## 3. Running inside an app (F1, F2)
 
@@ -180,15 +180,21 @@ read schema 1 changes or an output field below disappears.
 `search --json` without `--envelope` keeps today's array. `--query-stdin` reads the query from stdin so that it never
 appears in a process list. Warnings go to stderr, never to stdout, in every `--json` mode.
 
-## 7. The `archive` connector (F8, DEFERRED)
+## 7. The `archive` connector (F8, built 2026-11-24)
 
-Not built until the owner lifts the consumer's rule 32 (nothing of an archive item is stored but its id). Shape, for the
-day he does: `"archive": {"base_url": "http://127.0.0.1:<port>", "home": "<id>", "token_file": "/absolute/path"}`; loopback
-only; the token is read from the file at each sync (owner-only file, never the environment, an argument or a log) and sent
-as one request header; `GET <base>/api/archive-reader/<home>/items`, no redirect, 5 s, 1 MiB; a contract header is checked;
-`source` `archive`, `source_id` the item id, `content` the title and link, `sent_at` the item's date; rows that left the
-review window are deleted. Building it also publishes the reader's route and header names in this public repository: the
-owner decides that too.
+Archibald's intakes, from the local archive reader. Built on the owner's request to index them; the consumer's rule 32 is
+lifted for traul's database to this extent: the title, the link and the date of an intake (plus its id and source).
+
+- **Config:** `"archive": {"items_url": "http://127.0.0.1:<port>/<route>", "token_file": "/absolute/path", "token_header": "<name>"}`.
+  The route and the header name are the owner's settings: this public repository holds neither. Loopback `http` only.
+- **Token:** read from the file at each sync (a regular file with no group or other bits; never the environment, an
+  argument or a log), sent as that one header.
+- **Request:** one GET, its own agent, no redirect, 5 s, 1 MiB. The answer must be `schema` `archive-items`, `version` 1.
+- **Rows:** `source` `archive`, `source_id` the item id, `channel_id`/`channel_name` the item's source, `content` the title
+  (≤ 1000 characters) and the `http(s)` link, `sent_at` the source date, `metadata` `{"v":1,"id","url","dayOnly"}`. A
+  malformed item is skipped. Rows that left the review window are deleted, unless the answer is `truncated`.
+- **Files:** `src/lib/archive-config.ts`, `src/connectors/archive{,-http,-items,-connector}.ts`; tests
+  `test/lib/archive-config.test.ts`, `test/connectors/archive.test.ts`, the contract test for `sync archive --json`.
 
 ## 8. Tests (Bun, all run on Linux CI unless marked)
 

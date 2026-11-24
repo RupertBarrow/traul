@@ -28,7 +28,7 @@ Sync messages from communication sources incrementally.
 
 | Argument | Description |
 |----------|-------------|
-| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
+| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `archive`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
 
 - Uses cursor-based incremental sync (only fetches new messages)
 - Slack: syncs channels + thread replies, caches user profiles, stores reactions/reply_count in metadata
@@ -37,7 +37,7 @@ Sync messages from communication sources incrementally.
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
 - IMAP: read-only mail (`EXAMINE`, `BODY.PEEK`), cursors per folder on `UIDVALIDITY` and UID, budgets per run, backfill of stubs (see Connectors)
 - Reports messages added + contacts discovered per source
-- `--json` (imap only): prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
+- `--json` (imap and archive only): `sync archive --json` prints `{"source":"archive","status","added","updated","removed","skipped"}` (exit 2 for a bad `archive` section; every other status exits 0). `sync imap --json` prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
 
 ### `traul imap check --account <name> [--json]`
 
@@ -286,6 +286,32 @@ Read-only mail (docs/triage-fork/SPEC.md, section 5). Message text is stored in 
 - **Budget:** `max_messages_per_run` and `max_run_seconds` are shared by the accounts in turn; what is left waits for the next run.
 - **Logs:** counts and codes only, never a subject, an address or text.
 
+### Archive (Archibald's intakes)
+
+Intakes from a local archive reader (docs/triage-fork/SPEC.md, section 7). Off while `archive.items_url` is empty.
+
+- **Config:** `archive.items_url` (an `http://` URL on a loopback host, no credentials, no fragment: the reader's items route, which is the owner's setting, not a constant of this repository), `archive.token_file` (absolute path), `archive.token_header` (the header name the reader expects, `[A-Za-z0-9-]+`).
+- **Auth:** the token is read from `token_file` at each run and sent as that one header. The file must be a regular file with no group or other permission bits (`token_mode` otherwise); absent or empty is `no_token`. The token is never in the environment, an argument, a log or the output.
+- **Request:** one `GET` per run, its own HTTP agent (no proxy from the environment), no redirect followed, 5 s, 1 MiB.
+- **Answer:** `{"schema":"archive-items","version":1,"data":{"items":[...],"truncated":false}}`; anything else is `bad_answer` and nothing is written.
+- **Stored:** `source` `archive`; `source_id` the item id; `channel_id`/`channel_name` the item's `source.key`/`source.label`; `content` the title (at most 1000 characters), a blank line and the link (`http`/`https` only; the title alone otherwise); `sent_at` `sourceDate.ms` in seconds, else the time of the sync; `metadata` `{"v":1,"id","url","dayOnly"}`. Nothing else of an item is stored (no state, destination, note or result). An item without a positive integer id, a title, or a `source.key` matching `[a-z0-9-]+` is skipped.
+- **Removal:** rows whose id is not in an answer that says `truncated: false` are deleted (they left the reader's window), with their chunks and vectors.
+- **Statuses:** `ok`, `not_configured`, `bad_config`, `no_token`, `token_mode`, `unreachable`, `timeout`, `too_large`, `redirect`, `http_error`, `bad_answer`.
+- **Logs:** counts and the status only, never a title or a link.
+
+### Archive (Archibald's intakes)
+
+Intakes from a local archive reader (docs/triage-fork/SPEC.md, section 7). Off while `archive.items_url` is empty.
+
+- **Config:** `archive.items_url` (an `http://` URL on a loopback host, no credentials, no fragment: the reader's items route, which is the owner's setting, not a constant of this repository), `archive.token_file` (absolute path), `archive.token_header` (the header name the reader expects, `[A-Za-z0-9-]+`).
+- **Auth:** the token is read from `token_file` at each run and sent as that one header. The file must be a regular file with no group or other permission bits (`token_mode` otherwise); absent or empty is `no_token`. The token is never in the environment, an argument, a log or the output.
+- **Request:** one `GET` per run, its own HTTP agent (no proxy from the environment), no redirect followed, 5 s, 1 MiB.
+- **Answer:** `{"schema":"archive-items","version":1,"data":{"items":[...],"truncated":false}}`; anything else is `bad_answer` and nothing is written.
+- **Stored:** `source` `archive`; `source_id` the item id; `channel_id`/`channel_name` the item's `source.key`/`source.label`; `content` the title (at most 1000 characters), a blank line and the link (`http`/`https` only; the title alone otherwise); `sent_at` `sourceDate.ms` in seconds, else the time of the sync; `metadata` `{"v":1,"id","url","dayOnly"}`. Nothing else of an item is stored (no state, destination, note or result). An item without a positive integer id, a title, or a `source.key` matching `[a-z0-9-]+` is skipped.
+- **Removal:** rows whose id is not in an answer that says `truncated: false` are deleted (they left the reader's window), with their chunks and vectors.
+- **Statuses:** `ok`, `not_configured`, `bad_config`, `no_token`, `token_mode`, `unreachable`, `timeout`, `too_large`, `redirect`, `http_error`, `bad_answer`.
+- **Logs:** counts and the status only, never a title or a link.
+
 ### Claude Code
 
 - **Auth:** None required (reads local files)
@@ -414,6 +440,16 @@ FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
       "user": "me@example.org", "password_secret": "IMAP_PASSWORD_PERSONAL", "folders": ["INBOX"] }
   ]
 }
+```
+
+```json
+"archive": { "items_url": "http://127.0.0.1:4999/<reader items route>", "token_file": "/absolute/path/to/token",
+             "token_header": "<reader token header>" }
+```
+
+```json
+"archive": { "items_url": "http://127.0.0.1:4999/<reader items route>", "token_file": "/absolute/path/to/token",
+             "token_header": "<reader token header>" }
 ```
 
 ENV vars override config values. Empty `channels`/`chats` arrays = sync all.
