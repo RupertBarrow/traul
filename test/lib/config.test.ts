@@ -14,7 +14,6 @@ function makeConfig(overrides: Partial<TraulConfig> = {}): TraulConfig {
     whatsapp: { instances: [] },
     discord: { token: "", servers: { allowlist: [], stoplist: [] }, channels: { allowlist: [], stoplist: [] } },
     imap: defaultImapConfig(),
-    archive: { items_url: "", token_file: "", token_header: "" },
     embeddings: {
       backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
       keep_alive: "60s", timeout_ms: 30000, allow_remote: false,

@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import { defaultArchiveConfig, type ArchiveConfig } from "./archive-config";
 import { dirname } from "path";
 import { configPath, dbPath, ensureDir } from "./paths";
 import { DEFAULT_PORT, DEFAULT_EMBED_INTERVAL, type DaemonConfig, type DaemonIntervals } from "../daemon/types";
@@ -92,7 +91,6 @@ export interface TraulConfig {
     };
   };
   imap: ImapConfig;
-  archive: ArchiveConfig;
   embeddings: EmbeddingsConfig;
   daemon: DaemonConfig;
 }
@@ -120,7 +118,6 @@ function getDefaultConfig(): TraulConfig {
       channels: { allowlist: [], stoplist: [] },
     },
     imap: defaultImapConfig(),
-    archive: defaultArchiveConfig(),
     embeddings: {
       backend: "ollama", url: "http://127.0.0.1:11434", model: "", dims: 1024,
       keep_alive: "60s", timeout_ms: 30000, allow_remote: false,

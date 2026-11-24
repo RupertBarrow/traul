@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeAll, afterEach } from "bun:test";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { FakeImap } from "../helpers/fake-imap";
 import { mail } from "../helpers/mem-server";
 import { buildExe, sandbox, supported, type Sandbox } from "./harness";
@@ -40,36 +38,8 @@ describe.skipIf(!supported)("traul --contract", () => {
     expect(r.code).toBe(0);
     expect(r.err).toBe("");
     expect(r.out.trim().split("\n")).toHaveLength(1);
-    expect(r.json).toEqual({ contract: 1, readSchema: 1, version: expect.any(String), commit: "testcommit", connectors: ["imap", "archive"] });
+    expect(r.json).toEqual({ contract: 1, readSchema: 1, version: expect.any(String), commit: "testcommit", connectors: ["imap"] });
     expect(sb.hasDb()).toBe(false);
-  });
-});
-
-describe.skipIf(!supported)("traul sync archive --json", () => {
-  it("prints the archive report as one JSON value, the token never on stdout or stderr", async () => {
-    let token = "";
-    const reader = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(req) {
-      token = req.headers.get("x-reader-token") ?? "";
-      return Response.json({ schema: "archive-items", version: 1, data: { truncated: false, items: [
-        { id: 7, title: "Intake", source: { key: "youtube", label: "YouTube" }, sourceUrl: "https://www.example.org/v", sourceDate: { ms: 1759150800000 } }] } });
-    } });
-    try {
-      const sb = sandbox(exe);
-      writeFileSync(join(sb.home, "token"), "reader-secret", { mode: 0o600 });
-      sb.config({ archive: { items_url: `http://127.0.0.1:${reader.port}/r/items`, token_file: join(sb.home, "token"), token_header: "X-Reader-Token" } });
-      const r = await sb.run(["sync", "archive", "--json"]);
-      expect(r.code).toBe(0);
-      expect(r.out.trim().split("\n")).toHaveLength(1);
-      expect(r.json).toEqual({ source: "archive", status: "ok", added: 1, updated: 0, removed: 0, skipped: 0 });
-      expect(token).toBe("reader-secret");
-      expect(r.out + r.err).not.toContain("reader-secret");
-    } finally { reader.stop(true); }
-  });
-
-  it("a bad archive section exits 2", async () => {
-    const sb = sandbox(exe);
-    sb.config({ archive: { items_url: "http://192.0.2.10/items", token_file: "/x", token_header: "X" } });
-    expect((await sb.run(["sync", "archive", "--json"])).code).toBe(2);
   });
 });
 

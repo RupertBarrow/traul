@@ -1,5 +1,4 @@
 import type { Connector } from "./types";
-import { archiveConnector } from "./archive-connector";
 import { claudeCodeConnector } from "./claudecode";
 import { discordConnector } from "./discord";
 import { gmailConnector } from "./gmail";
@@ -12,7 +11,6 @@ import { whatsappConnector } from "./whatsapp";
 
 /** Every built-in connector, in the order `traul sync` runs them. */
 export const allConnectors: Connector[] = [
-  archiveConnector,
   claudeCodeConnector,
   discordConnector,
   gmailConnector,

@@ -20,13 +20,13 @@ database; an executable that finds a larger number exits 3 and touches nothing e
   Logs, warnings and errors go to stderr (never a password, host, user, subject or text).
 - Exit codes: 0 the command ran (read the states in the JSON); 2 bad configuration, option or input; 3 the database has a
   newer read schema than this executable; 1 any other failure.
-- No command in this file needs a network except `sync imap` (IMAP), `sync archive` (the archive reader, loopback only) and `embed`/`search` (Ollama, loopback only).
+- No command in this file needs a network except `sync imap` (IMAP) and `embed`/`search` (Ollama, loopback only).
 
 ## Commands
 
 ### `traul --contract`
 
-`{"contract":1,"readSchema":1,"version":"<package version>","commit":"<build commit or dev>","connectors":["imap","archive"]}`.
+`{"contract":1,"readSchema":1,"version":"<package version>","commit":"<build commit or dev>","connectors":["imap"]}`.
 Needs no database and no configuration file; creates no file. `connectors` lists the sources compiled in.
 
 ### `traul sync imap --json`
@@ -40,17 +40,6 @@ Needs no database and no configuration file; creates no file. `connectors` lists
   `protocol`. A folder that stopped early may carry an additional `code`.
 - A failing account is a status; the exit code stays 0. 2: bad imap configuration, or a source other than `imap`.
 - Does not embed afterwards; run `embed --json`.
-
-### `traul sync archive --json`
-
-```json
-{"source":"archive","status":"ok","added":1,"updated":0,"removed":0,"skipped":0}
-```
-
-- `status` is `ok` or `not_configured`, `bad_config`, `no_token`, `token_mode`, `unreachable`, `timeout`, `too_large`,
-  `redirect`, `http_error`, `bad_answer`. Exit 2 for `bad_config`, else 0.
-- Rows: `source` `archive`, `source_id` the item id, `content` the title and link, `metadata` `{"v":1,"id","url","dayOnly"}`
-  (SPEC section 7). Added in contract 1; nothing of read schema 1 changes.
 
 ### `traul embed --json [--limit <n>]`
 
