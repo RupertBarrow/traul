@@ -1,10 +1,16 @@
 import { listConversations, isMissingScope, slackErrorCode } from "./slack-conversations";
 import { WebClient, LogLevel } from "@slack/web-api";
+import { permalink, readableText, workspaceOf } from "./slack-message";
 import type { Connector, SyncResult } from "./types";
 import type { TraulDB } from "../db/database";
 import { type TraulConfig, getEffectiveSyncStart } from "../lib/config";
 import * as log from "../lib/logger";
 import { resolveSlackCredentials } from "../lib/slack-secrets";
+
+/** The stored format of Slack messages: 2 adds the workspace and permalink to the metadata and makes the text readable. */
+const FORMAT_KEY = "format";
+const FORMAT = "2";
+const NO_CURSOR = { getSyncCursor: () => null };
 
 export const slackConnector: Connector = {
   name: "slack",
@@ -75,6 +81,13 @@ export const slackConnector: Connector = {
       }
     }
 
+    const nameOf = async (userId: string) => (await resolveUser(userId)).displayName;
+    const workspace = await workspaceOf(client);
+    // Stored with the workspace, the permalink and readable text since format 2: one full refetch brings older messages up to it.
+    const refresh = db.getSyncCursor("slack", FORMAT_KEY) !== FORMAT;
+    const extra = (channelId: string, ts: string, threadTs?: string) =>
+      workspace ? { workspace: workspace.name, team_id: workspace.teamId, permalink: permalink(workspace, channelId, ts, threadTs) } : {};
+
     // Channels (the configured list, else every joined one), then DMs and group DMs
     const channelIds = await listConversations(
       client,
@@ -89,7 +102,7 @@ export const slackConnector: Connector = {
       try {
         log.info(`  ${channel.name.startsWith("@") ? "" : "#"}${channel.name}`);
         const cursorKey = `channel:${channel.id}`;
-        const oldest = getEffectiveSyncStart(db, config, "slack", cursorKey) ?? "0";
+        const oldest = getEffectiveSyncStart(refresh ? NO_CURSOR : db, config, "slack", cursorKey) ?? "0";
         let latestTs = oldest;
         let channelMsgCount = 0;
   
@@ -120,11 +133,12 @@ export const slackConnector: Connector = {
               thread_id: msg.thread_ts !== msg.ts ? msg.thread_ts : undefined,
               author_id: msg.user,
               author_name: user?.displayName,
-              content: msg.text,
+              content: await readableText(msg.text, nameOf),
               sent_at: Math.floor(parseFloat(msg.ts)),
               metadata: JSON.stringify({
                 reactions: msg.reactions,
                 reply_count: msg.reply_count,
+                ...extra(channel.id, msg.ts, msg.thread_ts),
               }),
             });
             channelMsgCount++;
@@ -159,8 +173,9 @@ export const slackConnector: Connector = {
                     thread_id: msg.ts,
                     author_id: reply.user,
                     author_name: replyUser?.displayName,
-                    content: reply.text,
+                    content: await readableText(reply.text, nameOf),
                     sent_at: Math.floor(parseFloat(reply.ts!)),
+                    metadata: JSON.stringify(extra(channel.id, reply.ts!, msg.ts)),
                   });
                   channelMsgCount++;
   
@@ -188,6 +203,7 @@ export const slackConnector: Connector = {
       }
     }
 
+    if (refresh && workspace) db.setSyncCursor("slack", FORMAT_KEY, FORMAT);
     return result;
   },
 };
