@@ -11,10 +11,11 @@ mock.module("@slack/web-api", () => ({
       },
       async history(args: { channel: string }) {
         if (args.channel === "D1") throw Object.assign(new Error("An API error occurred: channel_not_found"), { data: { error: "channel_not_found" } });
-        return { messages: [{ ts: "1700000000.000100", user: "U1", text: "hello" }], response_metadata: {} };
+        return { messages: [{ ts: "1700000000.000100", user: "U1", text: "hello <@U1>" }], response_metadata: {} };
       },
       async replies() { return { messages: [], response_metadata: {} }; },
     };
+    auth = { async test() { return { team: "Rapido", team_id: "T1", url: "https://rapido.slack.com/" }; } };
     users = { async info() { return { user: { name: "ana", profile: { display_name: "Ana" } } }; } };
   },
 }));
@@ -27,6 +28,20 @@ describe("Slack sync with one unreadable conversation", () => {
     const config = { database: { path: ":memory:" }, slack: { token: "xoxp-test", my_user_id: "", channels: [] } };
     const result = await slackConnector.sync(db, config as any);
     expect(result.messagesAdded).toBe(1);
+    db.close();
+  });
+
+  it("stores the workspace, the permalink and readable text, and a first run under format 2 refetches from the start once", async () => {
+    const { slackConnector } = await import("../../src/connectors/slack");
+    const { TraulDB } = await import("../../src/db/database");
+    const db = new TraulDB(":memory:");
+    db.setSyncCursor("slack", "channel:C1", "1800000000.000000"); // a cursor past the message: format 1 would fetch nothing
+    const config = { database: { path: ":memory:" }, slack: { token: "xoxp-test", my_user_id: "", channels: [] } };
+    expect((await slackConnector.sync(db, config as any)).messagesAdded).toBe(1);
+    const row = (db as any).db.query("SELECT content, metadata FROM messages WHERE source = 'slack'").get() as { content: string; metadata: string };
+    expect(row.content).toBe("hello @Ana");
+    expect(JSON.parse(row.metadata)).toMatchObject({ workspace: "Rapido", team_id: "T1", permalink: "https://rapido.slack.com/archives/C1/p1700000000000100" });
+    expect(db.getSyncCursor("slack", "format")).toBe("2");
     db.close();
   });
 });
