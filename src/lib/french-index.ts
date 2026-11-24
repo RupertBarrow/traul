@@ -32,13 +32,19 @@ function parts(word: string): string[] {
   return rest.length > 0 && ELISION.test(head) ? rest : [head, ...rest];
 }
 
+const cache = new Map<string, string[]>();
+
 /** The distinct stems of one part, without accents. */
 function stemsOf(part: string): string[] {
+  const hit = cache.get(part);
+  if (hit) return hit;
+  if (cache.size > 50_000) cache.clear();
   const out: string[] = [];
   for (const s of [stemFrench(part), stemFrench(stripAccents(part))]) {
     const plain = stripAccents(s);
     if (!out.includes(plain)) out.push(plain);
   }
+  cache.set(part, out);
   return out;
 }
 
