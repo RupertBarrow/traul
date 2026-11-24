@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { FakeImap } from "../helpers/fake-imap";
 import { mail } from "../helpers/mem-server";
 import { buildExe, sandbox, supported, type Sandbox } from "./harness";
@@ -38,8 +40,29 @@ describe.skipIf(!supported)("traul --contract", () => {
     expect(r.code).toBe(0);
     expect(r.err).toBe("");
     expect(r.out.trim().split("\n")).toHaveLength(1);
-    expect(r.json).toEqual({ contract: 1, readSchema: 1, version: expect.any(String), commit: "testcommit", connectors: ["imap"] });
+    expect(r.json).toEqual({ contract: 1, readSchema: 1, version: expect.any(String), commit: "testcommit", connectors: ["imap", "slack", "markdown"] });
     expect(sb.hasDb()).toBe(false);
+  });
+});
+
+describe.skipIf(!supported)("traul sync markdown|slack --json", () => {
+  it("markdown prints one JSON report", async () => {
+    const sb = sandbox(exe);
+    mkdirSync(join(sb.home, "notes"));
+    writeFileSync(join(sb.home, "notes", "a.md"), "# A\n\nhello");
+    sb.config({ markdown: { dirs: [join(sb.home, "notes")] } });
+    const r = await sb.run(["sync", "markdown", "--json"]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim().split("\n")).toHaveLength(1);
+    expect(r.json).toEqual({ source: "markdown", status: "ok", added: 1, updated: 0 });
+  });
+
+  it("slack without a token is no_credentials, exit 0", async () => {
+    const sb = sandbox(exe);
+    sb.config({ slack: { token_secret: "SLACK_TOKEN_TRIAGE" } });
+    const r = await sb.run(["sync", "slack", "--json"]);
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual({ source: "slack", status: "no_credentials", added: 0, updated: 0 });
   });
 });
 

@@ -93,6 +93,7 @@ export const markdownConnector: Connector = {
         const channelName = channelFromPath(filePath, dir);
         const title = basename(filePath, ".md");
 
+        const existed = db.hasMessage("markdown", sourceId);
         db.upsertMessage({
           source: "markdown",
           source_id: sourceId,
@@ -117,7 +118,8 @@ export const markdownConnector: Connector = {
           }
         }
 
-        result.messagesAdded++;
+        if (existed) result.messagesUpdated++;
+        else result.messagesAdded++;
         synced++;
 
         db.setSyncCursor("markdown", cursorKey, contentHash);

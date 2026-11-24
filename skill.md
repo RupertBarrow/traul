@@ -37,7 +37,7 @@ Sync messages from communication sources incrementally.
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
 - IMAP: read-only mail (`EXAMINE`, `BODY.PEEK`), cursors per folder on `UIDVALIDITY` and UID, budgets per run, backfill of stubs (see Connectors)
 - Reports messages added + contacts discovered per source
-- `--json` (imap only): prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
+- `--json` (imap, slack and markdown only): `sync slack --json` and `sync markdown --json` print `{"source","status","added","updated"}`, `status` one of `ok`, `not_configured` (markdown with no `dirs`), `no_credentials` (slack with no token), `failed` (the connector threw; no detail on stdout); exit 0. `sync imap --json` prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
 
 ### `traul imap check --account <name> [--json]`
 
@@ -250,8 +250,8 @@ All `--json` outputs use clean, normalized field names (not raw SQL column names
 
 ### Slack
 
-- **Auth:** `SLACK_BOT_TOKEN` or `SLACK_USER_TOKEN` env var (+ optional `SLACK_COOKIE_*` for user tokens)
-- **Config:** `token`, `cookie`, `my_user_id`, `channels[]`
+- **Auth:** `SLACK_BOT_TOKEN` or `SLACK_USER_TOKEN` env var (+ optional `SLACK_COOKIE_*` for user tokens), or by NAME: `slack.token_secret` / `slack.cookie_secret` name an environment variable or, on macOS with `slack.keychain_service`, a Keychain item (as IMAP passwords; never logged). A `token` given directly wins.
+- **Config:** `token`, `cookie`, `my_user_id`, `channels[]`, `token_secret`, `cookie_secret`, `keychain_service`
 - **Features:** Pagination (200/page), thread reply fetching, user profile caching, reaction/reply_count metadata
 - **Cursors:** Stored per-channel as timestamps
 
@@ -299,7 +299,7 @@ Read-only mail (docs/triage-fork/SPEC.md, section 5). Message text is stored in 
 
 - **Auth:** None required (reads local files)
 - **Config:** `markdown.dirs[]` — list of directories to scan (supports `~` expansion)
-- **Features:** Recursive `.md` file discovery, content-hash-based change detection, re-syncs on file modification
+- **Features:** Recursive `.md` file discovery, content-hash-based change detection, re-syncs on file modification (counted as updated, a new file as added)
 - **Channel:** Parent directory path relative to configured base dir
 - **Author:** Filename (without `.md` extension)
 - **Cursors:** Per-file content hash (only re-indexes changed files)

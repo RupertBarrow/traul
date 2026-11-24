@@ -49,6 +49,10 @@ export interface TraulConfig {
     cookie: string;
     my_user_id: string;
     channels: string[];
+    /** Secret NAMES (environment, then the Keychain of `keychain_service` on macOS); a `token` given directly wins. */
+    token_secret?: string;
+    cookie_secret?: string;
+    keychain_service?: string;
   };
   telegram: {
     api_id: string;
