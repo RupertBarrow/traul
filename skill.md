@@ -31,7 +31,7 @@ Sync messages from communication sources incrementally.
 | `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
 
 - Uses cursor-based incremental sync (only fetches new messages)
-- Slack: syncs channels + thread replies, caches user profiles, stores reactions/reply_count in metadata
+- Slack: syncs channels (the `slack.channels` list, else every joined channel), then every direct message and group DM, + thread replies; caches user profiles, stores reactions/reply_count in metadata. A DM is stored with `channel_name` `@<person>`, a group DM `@a, @b, @c`. DMs need the `im:read`, `im:history`, `mpim:read` and `mpim:history` scopes; without them the channels still sync and the DMs are skipped with a warning
 - Telegram: syncs via `tg.py` (Telethon), 1-hour cooldown skip per chat, progress reporting every 10s
 - Claude Code: reads all JSONL sessions from `~/.claude/projects/`, extracts user+assistant messages
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
@@ -253,7 +253,7 @@ All `--json` outputs use clean, normalized field names (not raw SQL column names
 
 - **Auth:** `SLACK_BOT_TOKEN` or `SLACK_USER_TOKEN` env var (+ optional `SLACK_COOKIE_*` for user tokens), or by NAME: `slack.token_secret` / `slack.cookie_secret` name an environment variable or, on macOS with `slack.keychain_service`, a Keychain item (as IMAP passwords; never logged). A `token` given directly wins.
 - **Config:** `token`, `cookie`, `my_user_id`, `channels[]`, `token_secret`, `cookie_secret`, `keychain_service`
-- **Features:** Pagination (200/page), thread reply fetching, user profile caching, reaction/reply_count metadata
+- **Features:** Pagination (200/page), direct messages and group DMs (scopes `im:read`, `im:history`, `mpim:read`, `mpim:history`), thread reply fetching, user profile caching, reaction/reply_count metadata
 - **Cursors:** Stored per-channel as timestamps
 
 ### Telegram

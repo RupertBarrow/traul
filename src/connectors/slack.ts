@@ -1,3 +1,4 @@
+import { listConversations, isMissingScope } from "./slack-conversations";
 import { WebClient, LogLevel } from "@slack/web-api";
 import type { Connector, SyncResult } from "./types";
 import type { TraulDB } from "../db/database";
@@ -74,41 +75,18 @@ export const slackConnector: Connector = {
       }
     }
 
-    // Get channels to sync
-    let channelIds: Array<{ id: string; name: string }> = [];
-
-    if (config.slack.channels.length > 0) {
-      // Use configured channel list
-      for (const name of config.slack.channels) {
-        const cursor = undefined;
-        let found = false;
-        for await (const page of paginateChannels(client)) {
-          const ch = page.find(
-            (c: any) => c.name === name || c.id === name
-          );
-          if (ch) {
-            channelIds.push({ id: ch.id, name: ch.name });
-            found = true;
-            break;
-          }
-        }
-        if (!found) log.warn(`Channel not found: ${name}`);
-      }
-    } else {
-      // All joined channels
-      for await (const page of paginateChannels(client)) {
-        for (const ch of page) {
-          if (ch.is_member) {
-            channelIds.push({ id: ch.id, name: ch.name });
-          }
-        }
-      }
-    }
+    // Channels (the configured list, else every joined one), then DMs and group DMs
+    const channelIds = await listConversations(
+      client,
+      config.slack.channels,
+      async (userId) => (await resolveUser(userId)).displayName,
+      (m) => log.warn(m),
+    );
 
     log.info(`Syncing ${channelIds.length} channels...`);
 
     for (const channel of channelIds) {
-      log.info(`  #${channel.name}`);
+      log.info(`  ${channel.name.startsWith("@") ? "" : "#"}${channel.name}`);
       const cursorKey = `channel:${channel.id}`;
       const oldest = getEffectiveSyncStart(db, config, "slack", cursorKey) ?? "0";
       let latestTs = oldest;
@@ -116,12 +94,16 @@ export const slackConnector: Connector = {
 
       let cursor: string | undefined;
       do {
-        const resp = await client.conversations.history({
-          channel: channel.id,
-          oldest,
-          limit: 200,
-          cursor,
-        });
+        const resp = await client.conversations
+          .history({ channel: channel.id, oldest, limit: 200, cursor })
+          .catch((err) => {
+            if (isMissingScope(err)) return null; // e.g. a DM without im:history: skip it, keep the channels
+            throw err;
+          });
+        if (!resp) {
+          log.warn(`    skipped: the token lacks the scope to read ${channel.name}`);
+          break;
+        }
 
         for (const msg of resp.messages ?? []) {
           if (msg.subtype && msg.subtype !== "thread_broadcast") continue;
@@ -203,21 +185,3 @@ export const slackConnector: Connector = {
     return result;
   },
 };
-
-async function* paginateChannels(client: WebClient) {
-  let cursor: string | undefined;
-  do {
-    const resp = await client.conversations.list({
-      types: "public_channel,private_channel",
-      limit: 200,
-      cursor,
-      exclude_archived: true,
-    });
-    yield (resp.channels ?? []) as Array<{
-      id: string;
-      name: string;
-      is_member: boolean;
-    }>;
-    cursor = resp.response_metadata?.next_cursor || undefined;
-  } while (cursor);
-}
