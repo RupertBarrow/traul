@@ -118,6 +118,32 @@ const SCHEMA_SQL = `
     INSERT INTO chunks_fts(rowid, content) VALUES (new.id, new.content);
   END;
 
+  -- French keyword index: each message's French stems (src/lib/french-index.ts), written by TraulDB.
+  CREATE TABLE IF NOT EXISTS messages_fr (
+    message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    stems TEXT NOT NULL
+  );
+
+  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fr_fts USING fts5(
+    stems,
+    content='messages_fr',
+    content_rowid='message_id',
+    tokenize='unicode61 remove_diacritics 2'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS messages_fr_ai AFTER INSERT ON messages_fr BEGIN
+    INSERT INTO messages_fr_fts(rowid, stems) VALUES (new.message_id, new.stems);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS messages_fr_ad AFTER DELETE ON messages_fr BEGIN
+    INSERT INTO messages_fr_fts(messages_fr_fts, rowid, stems) VALUES ('delete', old.message_id, old.stems);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS messages_fr_au AFTER UPDATE ON messages_fr BEGIN
+    INSERT INTO messages_fr_fts(messages_fr_fts, rowid, stems) VALUES ('delete', old.message_id, old.stems);
+    INSERT INTO messages_fr_fts(rowid, stems) VALUES (new.message_id, new.stems);
+  END;
+
   CREATE TABLE IF NOT EXISTS traul_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

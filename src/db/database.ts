@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { initializeDatabase } from "./schema";
 import * as Q from "./queries";
+import { frenchStems, frenchMatchQuery } from "../lib/french-index";
 
 /**
  * Sanitize user input for FTS5 MATCH queries.
@@ -61,6 +62,39 @@ export class TraulDB {
     sent_at: number;
     metadata?: string;
   }): void {
+    this.inTransaction(() => {
+      this.writeMessage(msg);
+      const row = this.db
+        .query<{ id: number; content: string }, [string, string]>(
+          "SELECT id, content FROM messages WHERE source = ? AND source_id = ?"
+        )
+        .get(msg.source, msg.source_id);
+      if (row) this.indexFrench(row.id, row.content);
+    });
+  }
+
+  /** Store a message's French stems (the stored content: an IMAP upsert can keep the older text). */
+  private indexFrench(id: number, content: string): void {
+    this.db.run(Q.UPSERT_MESSAGE_FR, [id, frenchStems(content)]);
+  }
+
+  /** Index up to `limit` messages that have no French stems yet; returns how many it indexed. */
+  indexMissingFrench(limit: number = 500): number {
+    const rows = this.db
+      .query<{ id: number; content: string }, [number]>(Q.GET_MESSAGES_WITHOUT_FR)
+      .all(limit);
+    this.inTransaction(() => {
+      for (const r of rows) this.indexFrench(r.id, r.content);
+    });
+    return rows.length;
+  }
+
+  /** Forget every message's French stems (they are rebuilt by indexMissingFrench). */
+  resetFrench(): void {
+    this.db.run("DELETE FROM messages_fr");
+  }
+
+  private writeMessage(msg: Parameters<TraulDB["upsertMessage"]>[0]): void {
     this.db.run(msg.source === "imap" ? Q.UPSERT_MESSAGE_IMAP : Q.UPSERT_MESSAGE, [
       msg.source,
       msg.source_id,
@@ -328,9 +362,39 @@ export class TraulDB {
     const k = limit * 3;
 
     const ftsMessages = this.searchMessages(query, { ...options, limit: k });
+    const ftsFrench = this.frenchSearch(Q.SEARCH_MESSAGES_FR_FILTERED, query, { ...options, limit: k });
     const ftsChunks = this.searchChunks(query, { ...options, limit: k });
 
-    return this.rrfMerge([ftsMessages, ftsChunks], limit);
+    return this.rrfMerge([ftsMessages, ftsFrench, ftsChunks], limit);
+  }
+
+  /** `sql` (a French-index query) for `query`'s French stems, with the usual filters. */
+  private frenchSearch(
+    sql: string,
+    query: string,
+    options: { source?: string; channel?: string; after?: number; before?: number; limit?: number }
+  ): MessageRow[] {
+    const conditions: string[] = [];
+    const params: (string | number)[] = [frenchMatchQuery(query)];
+    if (options.source) {
+      conditions.push("m.source = ?");
+      params.push(options.source);
+    }
+    if (options.channel) {
+      conditions.push("m.channel_name LIKE ?");
+      params.push(`%${options.channel}%`);
+    }
+    if (options.after) {
+      conditions.push("m.sent_at > ?");
+      params.push(options.after);
+    }
+    if (options.before) {
+      conditions.push("m.sent_at < ?");
+      params.push(options.before);
+    }
+    const where = conditions.length > 0 ? " AND " + conditions.join(" AND ") : "";
+    params.push(options.limit ?? 20);
+    return this.db.query<MessageRow, (string | number)[]>(sql + where + " ORDER BY rank LIMIT ?").all(...params);
   }
 
   /** FTS search only unembedded messages (backfill for cold start) */
@@ -439,8 +503,9 @@ export class TraulDB {
 
     // FTS backfill over unembedded content only
     const backfillMessages = this.ftsBackfillMessages(query, { ...options, limit: k });
+    const backfillFrench = this.frenchSearch(Q.FTS_BACKFILL_MESSAGES_FR, query, { ...options, limit: k });
     const backfillChunks = this.ftsBackfillChunks(query, { ...options, limit: k });
-    const backfillResults = this.rrfMerge([backfillMessages, backfillChunks], limit);
+    const backfillResults = this.rrfMerge([backfillMessages, backfillFrench, backfillChunks], limit);
 
     // Vector results first, then backfill (deduped by message id)
     const seen = new Set<number>();
@@ -810,6 +875,7 @@ export class TraulDB {
     }
     this.db.run("DELETE FROM chunks WHERE message_id = ?", [id]);
     this.db.run("DELETE FROM vec_messages WHERE message_id = ?", [id]);
+    this.db.run("DELETE FROM messages_fr WHERE message_id = ?", [id]);
     this.db.run("DELETE FROM messages WHERE id = ?", [id]);
   }
 

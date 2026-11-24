@@ -66,6 +66,7 @@ Hybrid search combining vector similarity (semantic) and FTS5 keyword matching w
 **Search modes:**
 - **Hybrid (default)** — best for multi-word and exploratory queries. Finds semantically related messages even when exact keywords don't appear. Embeds the query through the configured backend (Ollama by default; see Embeddings configuration). There is no fall-through from one backend to the other; if embedding is unavailable it falls back to FTS-only. Prints coverage ratio to stderr (e.g. `88% vector, 12% FTS`).
 - **FTS-only (`--fts`)** — keyword matching with BM25 ranking. Faster, but requires ALL terms to match (implicit AND). Brittle with multi-word queries, especially combined with source/channel filters.
+- **Keywords in French and English** — every keyword search (`--fts`, and the FTS part of hybrid) ignores case and accents and uses two indexes merged by RRF: the English one (porter stemmer) and a French one (Snowball French stemmer), so `impayé` finds `impayées` and `réunions` finds `Réunion`. Elided articles are ignored (`l'équipe` = `équipe`) and `œ`/`æ` read as `oe`/`ae`. Typing the accents gives the best French matching: an unaccented word (`impaye`) matches only the same unaccented form.
 - **OR mode (`--or`)** — joins search terms with OR instead of AND. Works with both `--fts` and hybrid. Use for broad exploratory queries where any term is relevant.
 - **Substring (`--like`)** — bypasses FTS entirely, uses SQL LIKE. Useful for exact phrases that FTS tokenization breaks (e.g. "how do I").
 
@@ -339,6 +340,8 @@ SQL-based pattern detection engine.
 |-------|---------|
 | `messages` | Primary message store (source, channel, author, content, sent_at, metadata JSON) |
 | `messages_fts` | FTS5 virtual table (content, author_name, channel_name) with porter tokenizer |
+| `messages_fr` | Each message's French stems (message_id → stems), written by traul on every message write |
+| `messages_fr_fts` | FTS5 virtual table over `messages_fr.stems` (unicode61, remove_diacritics 2) |
 | `vec_messages` | sqlite-vec virtual table for vector embeddings (float[1024]) |
 | `contacts` | Unified contact directory (display_name unique) |
 | `contact_identities` | Multi-source user mapping (source + source_user_id unique) |
@@ -346,7 +349,7 @@ SQL-based pattern detection engine.
 | `signal_definitions` | Signal rules with SQL queries |
 | `signal_results` | Signal matches with severity, dismissal tracking |
 
-FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages.
+FTS5 is auto-synced via INSERT/UPDATE/DELETE triggers on messages. The French index is written by traul itself (the stemmer is TypeScript); at start-up traul indexes any message without French stems, and rebuilds the index when `traul_meta.french_index_version` changes.
 
 ---
 
