@@ -93,6 +93,29 @@ export const SEARCH_MESSAGES_FILTERED = `
   WHERE messages_fts MATCH ?
 `;
 
+export const SEARCH_MESSAGES_FR_FILTERED = `
+  SELECT m.id, m.source, m.source_id, m.channel_name, m.thread_id,
+         m.author_name, m.content, m.sent_at, m.metadata,
+         bm25(messages_fr_fts) AS rank
+  FROM messages_fr_fts
+  JOIN messages m ON messages_fr_fts.rowid = m.id
+  WHERE messages_fr_fts MATCH ?
+`;
+
+export const UPSERT_MESSAGE_FR = `
+  INSERT INTO messages_fr (message_id, stems)
+  VALUES (?, ?)
+  ON CONFLICT(message_id) DO UPDATE SET stems = excluded.stems
+  WHERE stems != excluded.stems
+`;
+
+export const GET_MESSAGES_WITHOUT_FR = `
+  SELECT m.id, m.content FROM messages m
+  WHERE m.id NOT IN (SELECT message_id FROM messages_fr)
+  ORDER BY m.id
+  LIMIT ?
+`;
+
 export const GET_STATS = `
   SELECT
     (SELECT COUNT(*) FROM messages) AS total_messages,
@@ -219,6 +242,18 @@ export const FTS_BACKFILL_MESSAGES = `
   FROM messages_fts
   JOIN messages m ON messages_fts.rowid = m.id
   WHERE messages_fts MATCH ?
+    AND m.id NOT IN (SELECT message_id FROM vec_messages)
+    AND m.id NOT IN (SELECT DISTINCT message_id FROM chunks)
+`;
+
+// French FTS backfill: the same messages, through their French stems
+export const FTS_BACKFILL_MESSAGES_FR = `
+  SELECT m.id, m.source, m.source_id, m.channel_name, m.thread_id,
+         m.author_name, m.content, m.sent_at, m.metadata,
+         bm25(messages_fr_fts) AS rank
+  FROM messages_fr_fts
+  JOIN messages m ON messages_fr_fts.rowid = m.id
+  WHERE messages_fr_fts MATCH ?
     AND m.id NOT IN (SELECT message_id FROM vec_messages)
     AND m.id NOT IN (SELECT DISTINCT message_id FROM chunks)
 `;

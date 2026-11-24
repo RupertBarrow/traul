@@ -2,6 +2,7 @@ import type { TraulDB } from "./database";
 import { CHUNKER_VERSION } from "../lib/chunker";
 import { getEmbedSettings } from "../lib/embed-config";
 import * as log from "../lib/logger";
+import { FRENCH_INDEX_VERSION } from "../lib/french-index";
 
 export interface MigrationResult {
   chunksReset: boolean;
@@ -58,6 +59,17 @@ export function runMigrations(db: TraulDB): MigrationResult {
   }
   if (storedEmbedDims !== currentDims) {
     db.setMeta("embed_dims", currentDims);
+  }
+
+  // French keyword index: rebuilt when its stemming changes, and completed for messages an older traul wrote
+  const storedFrench = db.getMeta("french_index_version");
+  if (storedFrench !== null && storedFrench !== FRENCH_INDEX_VERSION) {
+    log.info(`French index updated (v${storedFrench} → v${FRENCH_INDEX_VERSION}), rebuilding...`);
+    db.resetFrench();
+  }
+  while (db.indexMissingFrench() > 0);
+  if (storedFrench !== FRENCH_INDEX_VERSION) {
+    db.setMeta("french_index_version", FRENCH_INDEX_VERSION);
   }
 
   return result;

@@ -37,6 +37,7 @@ export function importLines(db: TraulDB, lines: ImportLine[]): ImportResult {
       else if (insertMessage(db, l)) r.imported++;
       else r.existing++;
     }
+    while (db.indexMissingFrench() > 0);
   });
   return r;
 }
