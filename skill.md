@@ -31,7 +31,7 @@ Sync messages from communication sources incrementally.
 | `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
 
 - Uses cursor-based incremental sync (only fetches new messages)
-- Slack: syncs channels (the `slack.channels` list, else every joined channel), then every direct message and group DM, + thread replies; caches user profiles, stores reactions/reply_count in metadata. A DM is stored with `channel_name` `@<person>`, a group DM `@a, @b, @c`. DMs need the `im:read`, `im:history`, `mpim:read` and `mpim:history` scopes; without them the channels still sync and the DMs are skipped with a warning
+- Slack: syncs channels (the `slack.channels` list, else every joined channel), then every direct message and group DM, + thread replies; caches user profiles, stores reactions/reply_count in metadata. A DM is stored with `channel_name` `@<person>`, a group DM `@a, @b, @c`. DMs need the `im:read`, `im:history`, `mpim:read` and `mpim:history` scopes; without them the channels still sync and the DMs are skipped with a warning. A conversation Slack refuses to read (any error) is skipped with a warning naming its error code; the others still sync
 - Telegram: syncs via `tg.py` (Telethon), 1-hour cooldown skip per chat, progress reporting every 10s
 - Claude Code: reads all JSONL sessions from `~/.claude/projects/`, extracts user+assistant messages
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
