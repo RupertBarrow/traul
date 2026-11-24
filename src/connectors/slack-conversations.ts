@@ -76,3 +76,9 @@ export async function listConversations(
   }
   return out;
 }
+
+/** A Slack error's code for a log line (`channel_not_found`, `missing_scope`...), never a token or a message's text. */
+export function slackErrorCode(err: unknown): string {
+  const e = err as { data?: { error?: string }; code?: string; message?: string };
+  return e?.data?.error ?? e?.code ?? (e?.message ? e.message.slice(0, 120) : String(err));
+}
