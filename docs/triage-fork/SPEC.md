@@ -41,8 +41,9 @@ Triage keeps classification, labels, its console and its mail actions. Nothing o
   `node_modules` to find it in; measured: this works from an empty environment).
 - **Registry.** `registry.ts` no longer lists a directory or calls `require` with a computed path; it holds what
   `setConnectors([...])` gave it. `src/index.ts` registers all connectors (`connectors/all.ts`); `src/index.triage.ts`
-  registers `imap` only and leaves out the `whatsapp` command, so the compiled Triage executable contains no Slack, Discord,
-  Google, Linear or llama code.
+  registers `imap`, `slack` and `markdown` (Revision 2, 2026-11-24, on the owner's request) and leaves out the `whatsapp`
+  command, so the compiled Triage executable contains no Discord, Google, Linear or llama code. Slack's token is resolved
+  by NAME (`slack.token_secret`, `slack.cookie_secret`, `slack.keychain_service`), as IMAP passwords are.
 - **Build.** `scripts/build-triage.sh <outdir>`: `bun install --frozen-lockfile`, then
   `bun build --compile --external node-llama-cpp --target=bun-darwin-arm64 src/index.triage.ts --outfile <outdir>/traul-arm64`
   and the same for `bun-darwin-x64` → `traul-x86_64`; it prints the sha256 of both. Output is byte-identical for one commit,
@@ -195,7 +196,7 @@ owner decides that too.
 | Id | What | File |
 |---|---|---|
 | FT-1 | paths from `TRAUL_HOME` / `TRAUL_CONFIG_PATH`; modes 0700 / 0600; no `homedir()` outside `paths.ts` (source test) | `test/lib/paths.test.ts` |
-| FT-2 | registry holds what it is given; `index.triage.ts` registers `imap` only; the compiled Linux executable prints `--contract` from an empty environment and has no `googleapis` string | `test/connectors/registry.test.ts`, `test/build/compiled.test.ts` |
+| FT-2 | registry holds what it is given; `index.triage.ts` registers `imap`, `slack`, `markdown`; the compiled Linux executable prints `--contract` from an empty environment and has no `googleapis` string | `test/connectors/registry.test.ts`, `test/build/compiled.test.ts` |
 | FT-3 | `build-triage.sh --check`: two builds, same sha256 | CI step |
 | FT-4 | Ollama client against a fake server: batch, timeout, `model_missing`, `ollama_down`, `dims_mismatch`, the loopback rule (11 URLs), `allow_remote` only from the file, the Qwen query prefix, no llama import when the backend is `ollama` | `test/lib/ollama.test.ts`, `test/lib/embeddings.test.ts` |
 | FT-5 | model or dimension change resets the embeddings | `test/db/migrations.test.ts` |

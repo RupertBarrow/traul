@@ -40,13 +40,12 @@ describe.skipIf(!supported)("compiled Triage executable (linux-x64)", () => {
       stdout: "pipe", stderr: "pipe",
     });
     expect(r.exitCode).toBe(0);
-    expect(JSON.parse(r.stdout.toString())).toMatchObject({ contract: 1, readSchema: 1, connectors: ["imap"] });
+    expect(JSON.parse(r.stdout.toString())).toMatchObject({ contract: 1, readSchema: 1, connectors: ["imap", "slack", "markdown"] });
   });
 
-  it("contains no googleapis, slack or discord code", () => {
+  it("contains no googleapis code", () => {
     const bin = readFileSync(exe).toString("latin1");
     expect(bin.includes("googleapis")).toBe(false);
-    expect(bin.includes("@slack/web-api")).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   });
 });

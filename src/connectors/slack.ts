@@ -3,13 +3,15 @@ import type { Connector, SyncResult } from "./types";
 import type { TraulDB } from "../db/database";
 import { type TraulConfig, getEffectiveSyncStart } from "../lib/config";
 import * as log from "../lib/logger";
+import { resolveSlackCredentials } from "../lib/slack-secrets";
 
 export const slackConnector: Connector = {
   name: "slack",
   defaultInterval: 300,
-  hasCredentials: (config) => !!config.slack.token,
+  hasCredentials: (config) => !!(config.slack.token || config.slack.token_secret),
 
   async sync(db: TraulDB, config: TraulConfig): Promise<SyncResult> {
+    await resolveSlackCredentials(config);
     if (!config.slack.token) {
       log.warn("Slack token not configured.");
       log.warn("Set SLACK_BOT_TOKEN or SLACK_USER_TOKEN env var, or add slack.token to ~/.config/traul/config.json");

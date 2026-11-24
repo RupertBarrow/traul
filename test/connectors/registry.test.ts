@@ -41,8 +41,8 @@ describe("entry points", () => {
     );
   });
 
-  it("the Triage list holds imap only", () => {
-    expect(triageConnectors.map((c) => c.name)).toEqual(["imap"]);
+  it("the Triage list holds imap, slack and markdown", () => {
+    expect(triageConnectors.map((c) => c.name)).toEqual(["imap", "slack", "markdown"]);
   });
 
   it("index.triage.ts registers the Triage list and pulls in no other connector, no whatsapp, no llama", () => {

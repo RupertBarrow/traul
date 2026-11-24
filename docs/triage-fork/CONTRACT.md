@@ -26,7 +26,7 @@ database; an executable that finds a larger number exits 3 and touches nothing e
 
 ### `traul --contract`
 
-`{"contract":1,"readSchema":1,"version":"<package version>","commit":"<build commit or dev>","connectors":["imap"]}`.
+`{"contract":1,"readSchema":1,"version":"<package version>","commit":"<build commit or dev>","connectors":["imap","slack","markdown"]}`.
 Needs no database and no configuration file; creates no file. `connectors` lists the sources compiled in.
 
 ### `traul sync imap --json`
@@ -40,6 +40,17 @@ Needs no database and no configuration file; creates no file. `connectors` lists
   `protocol`. A folder that stopped early may carry an additional `code`.
 - A failing account is a status; the exit code stays 0. 2: bad imap configuration, or a source other than `imap`.
 - Does not embed afterwards; run `embed --json`.
+
+### `traul sync slack --json`, `traul sync markdown --json`
+
+```json
+{"source":"markdown","status":"ok","added":1,"updated":0}
+```
+
+- `status`: `ok`, `not_configured` (markdown with no `dirs`), `no_credentials` (slack with no token from the config, the
+  environment or `token_secret`), `failed` (the connector threw). Exit 0. Logs go to stderr.
+- Rows: `source` `slack` or `markdown`, the columns of read schema 1 as each connector fills them (`skill.md`).
+  Added in contract 1; nothing of read schema 1 changes.
 
 ### `traul embed --json [--limit <n>]`
 
