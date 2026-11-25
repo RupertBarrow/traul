@@ -5,7 +5,7 @@ import { ImapConfigError } from "../lib/imap-config";
 import { setInfoToStderr } from "../lib/logger";
 import { JSON_SOURCES, syncSourceReport } from "./sync-source";
 
-/** `traul sync imap|slack|markdown --json`: one JSON value on stdout (the report), logs on stderr. Returns the exit code. */
+/** `traul sync imap|slack|markdown|whatsapp|facebook --json`: one JSON value on stdout (the report), logs on stderr. Returns the exit code. */
 export async function runSyncJson(db: TraulDB, config: TraulConfig, source?: string): Promise<number> {
   setInfoToStderr(true);
   if (source && JSON_SOURCES.includes(source)) {
@@ -13,7 +13,7 @@ export async function runSyncJson(db: TraulDB, config: TraulConfig, source?: str
     return 0;
   }
   if (source !== "imap") {
-    console.error("sync --json supports the sources imap, slack and markdown only");
+    console.error("sync --json supports the sources imap, slack, markdown, whatsapp and facebook only");
     return 2;
   }
   try {

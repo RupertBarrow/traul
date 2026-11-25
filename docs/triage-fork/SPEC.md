@@ -41,7 +41,8 @@ Triage keeps classification, labels, its console and its mail actions. Nothing o
   `node_modules` to find it in; measured: this works from an empty environment).
 - **Registry.** `registry.ts` no longer lists a directory or calls `require` with a computed path; it holds what
   `setConnectors([...])` gave it. `src/index.ts` registers all connectors (`connectors/all.ts`); `src/index.triage.ts`
-  registers `imap`, `slack` and `markdown` (Revision 2, 2026-11-24, on the owner's request) and leaves out the `whatsapp`
+  registers `imap`, `slack` and `markdown` (Revision 2, 2026-11-24, on the owner's request), then `whatsapp` (the WAHA
+  connector, key by NAME) and `facebook` (Page inbox, token by NAME) (Revision 3, 2026-11-25), and leaves out the `whatsapp`
   command, so the compiled Triage executable contains no Discord, Google, Linear or llama code. Slack's token is resolved
   by NAME (`slack.token_secret`, `slack.cookie_secret`, `slack.keychain_service`), as IMAP passwords are.
 - **Build.** `scripts/build-triage.sh <outdir>`: `bun install --frozen-lockfile`, then

@@ -40,7 +40,7 @@ describe.skipIf(!supported)("traul --contract", () => {
     expect(r.code).toBe(0);
     expect(r.err).toBe("");
     expect(r.out.trim().split("\n")).toHaveLength(1);
-    expect(r.json).toEqual({ contract: 1, readSchema: 1, version: expect.any(String), commit: "testcommit", connectors: ["imap", "slack", "markdown"] });
+    expect(r.json).toEqual({ contract: 1, readSchema: 1, version: expect.any(String), commit: "testcommit", connectors: ["imap", "slack", "markdown", "whatsapp", "facebook"] });
     expect(sb.hasDb()).toBe(false);
   });
 });
@@ -63,6 +63,17 @@ describe.skipIf(!supported)("traul sync markdown|slack --json", () => {
     const r = await sb.run(["sync", "slack", "--json"]);
     expect(r.code).toBe(0);
     expect(r.json).toEqual({ source: "slack", status: "no_credentials", added: 0, updated: 0 });
+  });
+
+  it("whatsapp with no instance is not_configured, facebook with an unresolved token is no_credentials", async () => {
+    const sb = sandbox(exe);
+    sb.config({ facebook: { pages: [{ name: "shop", page_id: "1", token_secret: "FACEBOOK_TOKEN_SHOP" }] } });
+    const wa = await sb.run(["sync", "whatsapp", "--json"]);
+    expect(wa.code).toBe(0);
+    expect(wa.json).toEqual({ source: "whatsapp", status: "not_configured", added: 0, updated: 0 });
+    const fb = await sb.run(["sync", "facebook", "--json"]);
+    expect(fb.code).toBe(0);
+    expect(fb.json).toEqual({ source: "facebook", status: "no_credentials", added: 0, updated: 0 });
   });
 });
 

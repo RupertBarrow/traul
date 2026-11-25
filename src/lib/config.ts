@@ -39,6 +39,30 @@ export interface ImapConfig {
   accounts: ImapAccount[];
 }
 
+export interface WhatsappInstance {
+  name: string;
+  url: string;
+  api_key: string;
+  /** NAME of the WAHA API key (environment, then the Keychain); `api_key` given directly wins. */
+  api_key_secret?: string;
+  session: string;
+  chats: string[];
+}
+
+export interface FacebookPage {
+  /** Account name: the prefix of every `source_id` and cursor key. */
+  name: string;
+  page_id: string;
+  /** NAME of the Page access token (environment, then the Keychain of `facebook.keychain_service`). */
+  token_secret: string;
+}
+
+export interface FacebookConfig {
+  graph_version: string;
+  keychain_service: string;
+  pages: FacebookPage[];
+}
+
 export interface TraulConfig {
   sync_start: string;
   database: {
@@ -75,14 +99,11 @@ export interface TraulConfig {
     accounts: Array<{ name: string; labels: string[] }>;
   };
   whatsapp: {
-    instances: Array<{
-      name: string;
-      url: string;
-      api_key: string;
-      session: string;
-      chats: string[];
-    }>;
+    /** Keychain service for `api_key_secret` (macOS); empty: environment only. */
+    keychain_service?: string;
+    instances: WhatsappInstance[];
   };
+  facebook: FacebookConfig;
   discord: {
     token: string;
     servers: {
@@ -116,6 +137,7 @@ function getDefaultConfig(): TraulConfig {
     markdown: { dirs: [] },
     gmail: { client_id: "", client_secret: "", refresh_token: "", accounts: [] },
     whatsapp: { instances: [] },
+    facebook: { graph_version: "v26.0", keychain_service: "", pages: [] },
     discord: {
       token: "",
       servers: { allowlist: [], stoplist: [] },

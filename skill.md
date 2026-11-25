@@ -28,16 +28,18 @@ Sync messages from communication sources incrementally.
 
 | Argument | Description |
 |----------|-------------|
-| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, or `whatsapp`. Omit to sync all. |
+| `source` | Optional. `slack`, `telegram`, `discord`, `linear`, `gmail`, `imap`, `claudecode`, `markdown`, `whatsapp` or `facebook`. Omit to sync all. |
 
 - Uses cursor-based incremental sync (only fetches new messages)
 - Slack: syncs channels (the `slack.channels` list, else every joined channel), then every direct message and group DM, + thread replies; caches user profiles, stores reactions/reply_count in metadata, plus `workspace` (the team name), `team_id` and `permalink` (`https://<team>.slack.com/archives/<channel>/p<ts>`, with `?thread_ts=…&cid=…` for a thread reply) when `auth.test` answers. The stored text is readable: `<@U…>` becomes `@Name`, `<#C…|x>` `#x`, `<url|label>` `label`, `<!here>` `@here`, and `&amp;`/`&lt;`/`&gt;` are unescaped. The first sync after an upgrade to this format refetches every conversation once (sync cursor `slack`/`format` = `2`) so older messages gain it. A DM is stored with `channel_name` `@<person>`, a group DM `@a, @b, @c`. DMs need the `im:read`, `im:history`, `mpim:read` and `mpim:history` scopes; without them the channels still sync and the DMs are skipped with a warning. A conversation Slack refuses to read (any error) is skipped with a warning naming its error code; the others still sync
 - Telegram: syncs via `tg.py` (Telethon), 1-hour cooldown skip per chat, progress reporting every 10s
 - Claude Code: reads all JSONL sessions from `~/.claude/projects/`, extracts user+assistant messages
 - Markdown: walks configured dirs for `.md` files, tracks changes by content hash
+- WhatsApp: reads each WAHA instance's chats and messages (see Connectors); a person's chat carries `permalink` `https://wa.me/<number>`
+- Facebook: reads the Messenger inbox of each configured Facebook Page through the Graph API (see Connectors)
 - IMAP: read-only mail (`EXAMINE`, `BODY.PEEK`), cursors per folder on `UIDVALIDITY` and UID, budgets per run, backfill of stubs (see Connectors)
 - Reports messages added + contacts discovered per source
-- `--json` (imap, slack and markdown only): `sync slack --json` and `sync markdown --json` print `{"source","status","added","updated"}`, `status` one of `ok`, `not_configured` (markdown with no `dirs`), `no_credentials` (slack with no token), `failed` (the connector threw; no detail on stdout); exit 0. `sync imap --json` prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
+- `--json` (imap, slack, markdown, whatsapp and facebook only): `sync slack|markdown|whatsapp|facebook --json` print `{"source","status","added","updated"}`, `status` one of `ok`, `not_configured` (markdown with no `dirs`, whatsapp with no instance, facebook with no page), `no_credentials` (slack with no token, a WAHA `api_key_secret` or a Page `token_secret` that does not resolve), `failed` (the connector threw, also: no WAHA instance reachable and authenticated, or every Page refused by the Graph API; no detail on stdout); exit 0. `sync imap --json` prints the sync report as one JSON value on stdout (`{"source":"imap","accounts":[{"name","status","folders":[{"folder","uidValidity","lastUid","added","updated","backfilled","gone","skipped"}]}]}`); logs go to stderr; does not embed afterwards (run `traul embed --json`). Exit 0 when it ran (read the statuses), 2 for a bad configuration or another source, 3 for a database of a newer read schema. See `docs/triage-fork/CONTRACT.md`.
 
 ### `traul imap check --account <name> [--json]`
 
@@ -304,6 +306,21 @@ Read-only mail (docs/triage-fork/SPEC.md, section 5). Message text is stored in 
 - **Channel:** Parent directory path relative to configured base dir
 - **Author:** Filename (without `.md` extension)
 - **Cursors:** Per-file content hash (only re-indexes changed files)
+
+### WhatsApp
+
+- **Auth:** a WAHA instance (WhatsApp HTTP API, self-hosted; `docker-compose.waha.yml`), its session authenticated once by QR (`traul whatsapp auth <name>`, or WAHA's own dashboard). The API key is given directly (`api_key`) or by NAME (`api_key_secret`: an environment variable or, on macOS with `whatsapp.keychain_service`, a Keychain item; never logged). An instance with neither sends no key.
+- **Config:** `whatsapp.instances[]` — `name`, `url`, `session`, `api_key` or `api_key_secret`, optional `chats` (ids or name parts); `whatsapp.keychain_service`
+- **Rows:** `source` `whatsapp`, `source_id` `<instance>:<message id>`, `channel_id` the chat id, `channel_name` the chat name, `author_name` the sender's push name. `metadata`: `fromMe`, `hasMedia`, `ack`, `instance`, `isGroup` and, for a person's chat, `permalink` (`https://wa.me/<number>`). A media message without text is `[media: image|video|audio|document|sticker]`.
+- **Cursors:** per instance and chat, last message timestamp
+
+### Facebook
+
+- **Auth:** one Page access token per Page (from a Meta app with `pages_messaging` / `pages_read_engagement`, asked by someone with the MESSAGING task on the Page), by NAME only: `pages[].token_secret` names an environment variable or, on macOS with `facebook.keychain_service`, a Keychain item. The token is sent as an `Authorization: Bearer` header, never in a URL, never logged.
+- **Config:** `facebook.pages[]` — `name` (the account name), `page_id`, `token_secret`; `facebook.graph_version` (default `v26.0`); `facebook.keychain_service`
+- **Features:** reads `GET /<page-id>/conversations?platform=messenger` newest first, with the 20 most recent messages of each conversation (the Graph API gives no more), and stops at the first conversation not updated since the last sync. Only `graph.facebook.com` URLs are followed.
+- **Rows:** `source` `facebook`, `source_id` `<page name>:<message id>`, `channel_id` the conversation id, `channel_name` the other participants, `author_name` the sender. `metadata`: `page`, `page_id`, `page_name`, `fromPage`, `permalink` (the conversation in the Page inbox). An attachment adds a line `[attachment: image|video|audio|file]`.
+- **Cursors:** per page (`<name>:updated`), the newest conversation `updated_time` seen
 
 ---
 
