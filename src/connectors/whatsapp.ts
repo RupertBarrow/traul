@@ -1,7 +1,8 @@
 import type { Connector, SyncResult } from "./types";
 import type { TraulDB } from "../db/database";
-import { type TraulConfig, getEffectiveSyncStart } from "../lib/config";
+import { type TraulConfig, type WhatsappInstance, getEffectiveSyncStart } from "../lib/config";
 import * as log from "../lib/logger";
+import { resolveWhatsappKeys } from "../lib/whatsapp-secrets";
 
 interface WahaChat {
   id: string;
@@ -43,12 +44,20 @@ function mediaPlaceholder(msg: WahaMessage): string {
   return `[media: ${typeMap[type] ?? type}]`;
 }
 
+/** A person's chat opens at wa.me/<number>; a group (or anything else) has no link. */
+export function chatLink(chatId: string): string | null {
+  const m = /^(\d{5,20})@(c\.us|s\.whatsapp\.net)$/.exec(chatId);
+  return m ? `https://wa.me/${m[1]}` : null;
+}
+
+/** Syncs one WAHA instance; false when WAHA could not be reached or the session is not authenticated. */
 async function syncInstance(
   db: TraulDB,
   config: TraulConfig,
-  instance: { name: string; url: string; api_key: string; session: string; chats: string[] },
+  instance: WhatsappInstance,
   result: SyncResult,
-): Promise<void> {
+  fetch: typeof globalThis.fetch,
+): Promise<boolean> {
   const { name, url, api_key, session, chats: chatFilter } = instance;
   const headers = getHeaders(api_key);
 
@@ -56,22 +65,22 @@ async function syncInstance(
     const statusResp = await fetch(`${url}/api/sessions/${session}`, { headers });
     if (!statusResp.ok) {
       log.warn(`  [${name}] WAHA session "${session}" not found. Run: traul whatsapp auth ${name}`);
-      return;
+      return false;
     }
     const status = await statusResp.json() as { status: string };
     if (status.status !== "WORKING") {
       log.warn(`  [${name}] WAHA session not authenticated (status: ${status.status}). Run: traul whatsapp auth ${name}`);
-      return;
+      return false;
     }
   } catch {
-    log.warn(`  [${name}] Cannot reach WAHA at ${url}. Is it running?`);
-    return;
+    log.warn(`  [${name}] Cannot reach WAHA. Is it running?`);
+    return false;
   }
 
   const chatsResp = await fetch(`${url}/api/sessions/${session}/chats`, { headers });
   if (!chatsResp.ok) {
     log.warn(`  [${name}] Failed to list chats: ${chatsResp.status}`);
-    return;
+    return false;
   }
   let allChats = await chatsResp.json() as WahaChat[];
 
@@ -85,6 +94,7 @@ async function syncInstance(
 
   for (const chat of allChats) {
     const chatName = chat.name || chat.id;
+    const link = chatLink(chat.id);
     const cursorKey = `${name}:chat:${chat.id}`;
     const effectiveStart = getEffectiveSyncStart(db, config, "whatsapp", cursorKey);
     const afterTs = effectiveStart ? parseInt(effectiveStart) : 0;
@@ -138,6 +148,9 @@ async function syncInstance(
             fromMe: msg.fromMe,
             hasMedia: msg.hasMedia,
             ack: msg.ack,
+            instance: name,
+            isGroup: !!chat.isGroup,
+            ...(link ? { permalink: link } : {}),
           }),
         });
         chatMsgCount++;
@@ -175,27 +188,31 @@ async function syncInstance(
       log.info(`      ${chatMsgCount} messages`);
     }
   }
+  return true;
+}
+
+/** Syncs every instance (API keys resolved by name first); throws when none could be read, so a report says failed. */
+export async function syncWhatsapp(db: TraulDB, config: TraulConfig, fetchFn: typeof fetch = fetch): Promise<SyncResult> {
+  const result: SyncResult = { messagesAdded: 0, messagesUpdated: 0, contactsAdded: 0 };
+  const instances = config.whatsapp.instances;
+  if (instances.length === 0) {
+    log.warn("No WhatsApp instances configured.");
+    log.warn("Add whatsapp.instances to ~/.config/traul/config.json");
+    return result;
+  }
+  await resolveWhatsappKeys(config);
+  log.info(`Syncing ${instances.length} WhatsApp instance(s)...`);
+  let reached = 0;
+  for (const instance of instances) {
+    if (await syncInstance(db, config, instance, result, fetchFn)) reached++;
+  }
+  if (reached === 0) throw new Error("whatsapp: no WAHA instance could be read");
+  return result;
 }
 
 export const whatsappConnector: Connector = {
   defaultInterval: 300,
   hasCredentials: (config) => config.whatsapp.instances.length > 0,
   name: "whatsapp",
-
-  async sync(db: TraulDB, config: TraulConfig): Promise<SyncResult> {
-    const result: SyncResult = { messagesAdded: 0, messagesUpdated: 0, contactsAdded: 0 };
-
-    if (config.whatsapp.instances.length === 0) {
-      log.warn("No WhatsApp instances configured.");
-      log.warn("Add whatsapp.instances to ~/.config/traul/config.json");
-      return result;
-    }
-
-    log.info(`Syncing ${config.whatsapp.instances.length} WhatsApp instance(s)...`);
-    for (const instance of config.whatsapp.instances) {
-      await syncInstance(db, config, instance, result);
-    }
-
-    return result;
-  },
+  sync: (db, config) => syncWhatsapp(db, config),
 };

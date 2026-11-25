@@ -37,15 +37,15 @@ describe("entry points", () => {
   it("all.ts registers every built-in connector once", () => {
     const names = allConnectors.map((c) => c.name).sort();
     expect(names).toEqual(
-      ["claudecode", "discord", "gmail", "imap", "linear", "markdown", "slack", "telegram", "whatsapp"],
+      ["claudecode", "discord", "facebook", "gmail", "imap", "linear", "markdown", "slack", "telegram", "whatsapp"],
     );
   });
 
-  it("the Triage list holds imap, slack and markdown", () => {
-    expect(triageConnectors.map((c) => c.name)).toEqual(["imap", "slack", "markdown"]);
+  it("the Triage list holds imap, slack, markdown, whatsapp and facebook", () => {
+    expect(triageConnectors.map((c) => c.name)).toEqual(["imap", "slack", "markdown", "whatsapp", "facebook"]);
   });
 
-  it("index.triage.ts registers the Triage list and pulls in no other connector, no whatsapp, no llama", () => {
+  it("index.triage.ts registers the Triage list and pulls in no other connector, no whatsapp command, no llama", () => {
     const text = src("index.triage.ts");
     expect(text).toContain("triageConnectors");
     expect(text).not.toMatch(/connectors\/all|whatsapp|slack|discord|gmail|linear|telegram|llama/i);

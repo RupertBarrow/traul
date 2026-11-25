@@ -1,6 +1,7 @@
 import type { Connector } from "./types";
 import { claudeCodeConnector } from "./claudecode";
 import { discordConnector } from "./discord";
+import { facebookConnector } from "./facebook";
 import { gmailConnector } from "./gmail";
 import { imapConnector } from "./imap";
 import { linearConnector } from "./linear";
@@ -13,6 +14,7 @@ import { whatsappConnector } from "./whatsapp";
 export const allConnectors: Connector[] = [
   claudeCodeConnector,
   discordConnector,
+  facebookConnector,
   gmailConnector,
   imapConnector,
   linearConnector,

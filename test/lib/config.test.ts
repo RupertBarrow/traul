@@ -12,6 +12,7 @@ function makeConfig(overrides: Partial<TraulConfig> = {}): TraulConfig {
     markdown: { dirs: [] },
     gmail: { client_id: "", client_secret: "", refresh_token: "", accounts: [] },
     whatsapp: { instances: [] },
+    facebook: { graph_version: "v26.0", keychain_service: "", pages: [] },
     discord: { token: "", servers: { allowlist: [], stoplist: [] }, channels: { allowlist: [], stoplist: [] } },
     imap: defaultImapConfig(),
     embeddings: {

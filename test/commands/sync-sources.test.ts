@@ -65,3 +65,20 @@ describe("sync <slack|markdown> --json report", () => {
     expect(r).toEqual({ source: "slack", status: "failed", added: 0, updated: 0 });
   });
 });
+
+describe("sync <whatsapp|facebook> --json report", () => {
+  it("whatsapp with no instance and facebook with no page are not_configured", async () => {
+    const c = config({ whatsapp: { keychain_service: "", instances: [] }, facebook: { graph_version: "v26.0", keychain_service: "", pages: [] } });
+    expect(await syncSourceReport(db, c, "whatsapp")).toEqual({ source: "whatsapp", status: "not_configured", added: 0, updated: 0 });
+    expect(await syncSourceReport(db, c, "facebook")).toEqual({ source: "facebook", status: "not_configured", added: 0, updated: 0 });
+  });
+
+  it("an unresolved WAHA key or Page token is no_credentials", async () => {
+    const c = config({
+      whatsapp: { keychain_service: "", instances: [{ name: "p", url: "http://127.0.0.1:3000", api_key: "", api_key_secret: "TEST_NO_KEY", session: "default", chats: [] }] },
+      facebook: { graph_version: "v26.0", keychain_service: "", pages: [{ name: "shop", page_id: "1", token_secret: "TEST_NO_TOKEN" }] },
+    });
+    expect((await syncSourceReport(db, c, "whatsapp")).status).toBe("no_credentials");
+    expect((await syncSourceReport(db, c, "facebook")).status).toBe("no_credentials");
+  });
+});

@@ -20,13 +20,14 @@ database; an executable that finds a larger number exits 3 and touches nothing e
   Logs, warnings and errors go to stderr (never a password, host, user, subject or text).
 - Exit codes: 0 the command ran (read the states in the JSON); 2 bad configuration, option or input; 3 the database has a
   newer read schema than this executable; 1 any other failure.
-- No command in this file needs a network except `sync imap` (IMAP) and `embed`/`search` (Ollama, loopback only).
+- No command in this file needs a network except `sync imap` (IMAP), `sync slack` (Slack), `sync whatsapp` (the configured
+  WAHA instance), `sync facebook` (graph.facebook.com) and `embed`/`search` (Ollama, loopback only).
 
 ## Commands
 
 ### `traul --contract`
 
-`{"contract":1,"readSchema":1,"version":"<package version>","commit":"<build commit or dev>","connectors":["imap","slack","markdown"]}`.
+`{"contract":1,"readSchema":1,"version":"<package version>","commit":"<build commit or dev>","connectors":["imap","slack","markdown","whatsapp","facebook"]}`.
 Needs no database and no configuration file; creates no file. `connectors` lists the sources compiled in.
 
 ### `traul sync imap --json`
@@ -41,16 +42,19 @@ Needs no database and no configuration file; creates no file. `connectors` lists
 - A failing account is a status; the exit code stays 0. 2: bad imap configuration, or a source other than `imap`.
 - Does not embed afterwards; run `embed --json`.
 
-### `traul sync slack --json`, `traul sync markdown --json`
+### `traul sync slack|markdown|whatsapp|facebook --json`
 
 ```json
 {"source":"markdown","status":"ok","added":1,"updated":0}
 ```
 
-- `status`: `ok`, `not_configured` (markdown with no `dirs`), `no_credentials` (slack with no token from the config, the
-  environment or `token_secret`), `failed` (the connector threw). Exit 0. Logs go to stderr.
-- Rows: `source` `slack` or `markdown`, the columns of read schema 1 as each connector fills them (`skill.md`).
-  Added in contract 1; nothing of read schema 1 changes.
+- `status`: `ok`, `not_configured` (markdown with no `dirs`, whatsapp with no instance, facebook with no page),
+  `no_credentials` (slack with no token from the config, the environment or `token_secret`; a WAHA `api_key_secret` or a
+  Page `token_secret` that does not resolve), `failed` (the connector threw; for whatsapp also: no instance reachable and
+  authenticated; for facebook: every Page refused). Exit 0. Logs go to stderr.
+- Rows: `source` `slack`, `markdown`, `whatsapp` or `facebook`, the columns of read schema 1 as each connector fills them
+  (`skill.md`); `metadata.permalink` opens the item when the source has one. Added in contract 1; nothing of read schema 1
+  changes.
 
 ### `traul embed --json [--limit <n>]`
 
